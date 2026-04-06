@@ -41,10 +41,11 @@ diff-runtime.txt: ${OUTPREFIX}.time ${PREV_OUTPREFIX}.time
 	echo -e "current_time\tprevious_time\trelative_diff" > $@; \
 	echo -e "$$time\t$$prev_time\t$$(echo "scale=6; ($$time - $$prev_time) / $$prev_time" | bc)" >> $@
 
-# Reset the stored previous run to the current run for future comparisons
+# Reset the stored previous run to the current run for future comparisons, and record date/time of the stored run
 store-curr-as-prev:
 	mkdir -p prev_run
 	mv ${OUTPREFIX}.* prev_run/
+	date > prev_run/run_stored_date.txt
 
 # Remove the output files from the current run
 clean:
