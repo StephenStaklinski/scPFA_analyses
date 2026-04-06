@@ -13,6 +13,9 @@ SIGMA_LATENT := 2.0,1.0,0.5
 # Specify the range of sigma-obs values to test
 SIGMA_OBS_VALUES := 0.01 0.5 1.0 5.0 10.0 20.0
 
+# Specify how many sims to run for each condition
+N_SIMS := 10
+
 FIRST_SIGMA := $(firstword $(SIGMA_OBS_VALUES))
 FIRST_EVAL := sim_$(FIRST_SIGMA)_eval.eval.summary.tsv
 EVALS := $(addprefix sim_,$(addsuffix _eval.eval.summary.tsv, $(SIGMA_OBS_VALUES)))
