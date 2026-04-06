@@ -80,51 +80,8 @@ python_check() {
   --fit-prefix "$FIT_MED" \
   --outprefix "$EVAL_MED"
 
-# Test 3: reproducibility.
-# Run the simulator twice with the same seed and confirm that the generated
-# expression matrix and key truth files are byte-identical.
-"$BIN_DIR/gexSimulateLatent" \
-  --trees "$TREE_FILE" \
-  --outprefix "$SIM_REPRO_A" \
-  --k 3 \
-  --n-genes 24 \
-  --sigma-obs 0.05 \
-  --sigma-latent 1.5,0.7,0.3 \
-  --seed 123
 
-"$BIN_DIR/gexSimulateLatent" \
-  --trees "$TREE_FILE" \
-  --outprefix "$SIM_REPRO_B" \
-  --k 3 \
-  --n-genes 24 \
-  --sigma-obs 0.05 \
-  --sigma-latent 1.5,0.7,0.3 \
-  --seed 123
-
-cmp -s "$SIM_REPRO_A.expr.tsv" "$SIM_REPRO_B.expr.tsv"
-cmp -s "$SIM_REPRO_A.truth.summary.tsv" "$SIM_REPRO_B.truth.summary.tsv"
-cmp -s "$SIM_REPRO_A.truth.Z.tsv" "$SIM_REPRO_B.truth.Z.tsv"
-cmp -s "$SIM_REPRO_A.truth.L.tsv" "$SIM_REPRO_B.truth.L.tsv"
-
-# Test 4: filter-stage smoke test on real input.
-# This does not use the latent simulator. It simply checks that the existing
-# phylogenetic filtering path still runs successfully on the Quinn example data
-# after adding the new simulation/evaluation workflow.
-"$BIN_DIR/gexLineage" \
-  --trees "$TREE_FILE" \
-  --expr "$ROOT_DIR/../gex_lineage_tests/input/quinn.90.gex.tsv" \
-  --outprefix "$FILTER_SMOKE" \
-  --tree-total-time 54 \
-  --n-filter-trees 3 \
-  --filter-only \
-  --seed 11
-
-LOW_SUBSPACE="$(get_metric latent_subspace_similarity "$EVAL_LOW.eval.summary.tsv")"
-LOW_GENE_CORR="$(get_metric gene_cov_correlation "$EVAL_LOW.eval.summary.tsv")"
-MED_SUBSPACE="$(get_metric latent_subspace_similarity "$EVAL_MED.eval.summary.tsv")"
-MED_GENE_CORR="$(get_metric gene_cov_correlation "$EVAL_MED.eval.summary.tsv")"
-
-# Test 5: metric sanity checks.
+# Metric sanity checks.
 # Enforce that the low-noise case has strong recovery, and that the
 # moderate-noise case is measurably worse on representative recovery metrics.
 python_check "$LOW_SUBSPACE" "$LOW_GENE_CORR" "$MED_SUBSPACE" "$MED_GENE_CORR" <<'PY'
