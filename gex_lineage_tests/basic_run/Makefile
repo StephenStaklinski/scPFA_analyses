@@ -25,7 +25,7 @@ ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${INPUT_DATA_DIR}/quinn_CP90/$
 		--expr ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.gex.tsv \
 		--outprefix ${OUTPREFIX} \
 		--seed 1 \
-		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term 2>&1
+		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term
 
 # Compare the final objective value
 diff-objective.txt: ${OUTPREFIX}.model.log ${PREV_OUTPREFIX}.model.log 

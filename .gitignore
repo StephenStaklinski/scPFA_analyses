@@ -5,5 +5,8 @@ input_datasets
 # Do not track results
 quinn.90.*
 prev_run
-diff-*.txt
+diff*.txt
+positive.*
+negative.*
+
 
