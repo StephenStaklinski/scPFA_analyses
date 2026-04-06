@@ -48,4 +48,4 @@ store-curr-as-prev:
 
 # Remove the output files from the current run
 clean:
-	rm -f ${OUTPREFIX}.*
+	rm -f ${OUTPREFIX}.* diff*.txt

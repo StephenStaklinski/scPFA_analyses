@@ -8,5 +8,6 @@ prev_run
 diff*.txt
 positive.*
 negative.*
+sim_*
 
 

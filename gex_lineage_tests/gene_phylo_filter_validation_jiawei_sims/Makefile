@@ -37,4 +37,4 @@ diff.txt: positive.correlation.lrt.tsv negative.correlation.lrt.tsv
 
     
 clean:
-	rm -f positive.* negative.*
+	rm -f positive.* negative.* diff.txt
