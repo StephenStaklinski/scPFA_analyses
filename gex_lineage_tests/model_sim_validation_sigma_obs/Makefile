@@ -11,49 +11,58 @@ K := 3
 SIGMA_LATENT := 2.0,1.0,0.5
 
 # Specify the range of sigma-obs values to test
-SIGMA_OBS_VALUES := 0.01 0.5 1.0 5.0 10.0 20.0
+SIGMA_OBS_VALUES := 0.01 0.5 1.0 5.0 10.0 20.0 50.0 100.0
 
 # Specify how many sims to run for each condition
 N_SIMS := 10
 
-FIRST_SIGMA := $(firstword $(SIGMA_OBS_VALUES))
-FIRST_EVAL := sim_$(FIRST_SIGMA)_eval.eval.summary.tsv
-EVALS := $(addprefix sim_,$(addsuffix _eval.eval.summary.tsv, $(SIGMA_OBS_VALUES)))
+SIM_IDS := $(shell seq 1 $(N_SIMS))
+RUN_STEMS := $(foreach condition,$(SIGMA_OBS_VALUES),$(foreach sim,$(SIM_IDS),$(condition)_$(sim)))
+FIRST_STEM := $(firstword $(RUN_STEMS))
+FIRST_EVAL := sim_$(FIRST_STEM)_eval.eval.summary.tsv
+EVALS := $(addprefix sim_,$(addsuffix _eval.eval.summary.tsv, $(RUN_STEMS)))
 
 all: diff.txt
 
 # Simulate the data under the specified conditions
 sim_%.truth.summary.tsv: ${TREE_FILE}
+	stem="$*"; condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
 	${GEX_LINEAGE_DIR}/bin/gexSimulateLatent \
 		--trees ${TREE_FILE} \
-		--outprefix sim_$* \
+		--outprefix sim_$${condition}_$${sim_num} \
 		--k ${K} \
 		--n-genes ${N_GENES} \
-		--sigma-obs $* \
-		--sigma-latent ${SIGMA_LATENT} > sim_$*.term
+		--sigma-obs $${condition} \
+		--sigma-latent ${SIGMA_LATENT} \
+		--seed $$(shuf -i 1-1000000000 -n 1) > sim_$${condition}_$${sim_num}.term
 
 # Fit the model to the simulated data
 sim_%.fit.model.summary.tsv: ${TREE_FILE} sim_%.truth.summary.tsv
+	stem="$*"; condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
 	${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--trees ${TREE_FILE} \
-		--expr sim_$*.expr.tsv \
-		--outprefix sim_$*_fit \
-		--no-filter > sim_$*_fit.term
+		--expr sim_$${condition}_$${sim_num}.expr.tsv \
+		--outprefix sim_$${condition}_$${sim_num}_fit \
+		--no-filter \
+		--seed $$(shuf -i 1-1000000000 -n 1) > sim_$${condition}_$${sim_num}_fit.term
 
 # Evaluate the model recovery of the simulated data
 sim_%_eval.eval.summary.tsv: sim_%.truth.summary.tsv sim_%.fit.model.summary.tsv
+	stem="$*"; condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
 	${GEX_LINEAGE_DIR}/bin/gexEvaluateSimulation \
-		--truth-prefix sim_$* \
-		--fit-prefix sim_$*_fit \
-		--outprefix sim_$*_eval > sim_$*_eval.term
+		--truth-prefix sim_$${condition}_$${sim_num} \
+		--fit-prefix sim_$${condition}_$${sim_num}_fit \
+		--outprefix sim_$${condition}_$${sim_num}_eval > sim_$${condition}_$${sim_num}_eval.term
 
 # Compare recovery metrics
 diff.txt: $(EVALS)
 	printf "condition" > $@; \
+	printf "\tsim" >> $@; \
 	awk -F '\t' 'NR > 1 { printf "\t%s", $$1 } END { printf "\n" }' $(FIRST_EVAL) >> $@; \
-	for condition in $(SIGMA_OBS_VALUES); do \
-		printf "$$condition" >> $@; \
-		awk -F '\t' 'NR > 1 { printf "\t%s", $$2 } END { printf "\n" }' sim_$${condition}_eval.eval.summary.tsv >> $@; \
+	for stem in $(RUN_STEMS); do \
+		condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
+		printf "%s\t%s" "$$condition" "$$sim_num" >> $@; \
+		awk -F '\t' 'NR > 1 { printf "\t%s", $$2 } END { printf "\n" }' sim_$${stem}_eval.eval.summary.tsv >> $@; \
 	done
 
 clean:
