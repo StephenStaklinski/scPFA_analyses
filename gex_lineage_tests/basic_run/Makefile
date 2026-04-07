@@ -15,14 +15,18 @@ all: run compare
 run: ${OUTPREFIX}.model.log
 compare: diff-objective.txt diff-runtime.txt
 
+# Subset to less genes for a faster run
+${OUTPREFIX}.gex.tsv: ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.gex.tsv
+	cut -f1-21 $< > $@
+
 # Main run on the example dataset
 ${OUTPREFIX}.term ${OUTPREFIX}.time ${OUTPREFIX}.model.log ${OUTPREFIX}.model.summary.tsv \
 ${OUTPREFIX}.model.Z.tsv ${OUTPREFIX}.model.L.tsv: \
-${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.gex.tsv
+${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${OUTPREFIX}.gex.tsv
 	/usr/bin/time -o ${OUTPREFIX}.time \
 		${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--trees ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex \
-		--expr ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.gex.tsv \
+		--expr ${OUTPREFIX}.gex.tsv \
 		--outprefix ${OUTPREFIX} \
 		--seed 1 \
 		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term
