@@ -1,0 +1,66 @@
+Bootstrap: docker
+From: rocker/r-ver:4.3.2
+
+%labels
+    Author Stephen_Staklinski
+    Description "Reusable R plotting container with common plotting packages and phylogenetic packages."
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+
+%post
+
+    apt-get update && apt-get install -y \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        libxml2-dev \
+        libfontconfig1-dev \
+        libharfbuzz-dev \
+        libfribidi-dev \
+        libcairo2-dev \
+        libfreetype6-dev \
+        libpng-dev \
+        libtiff5-dev \
+        libjpeg-dev \
+        libxt-dev \
+        git \
+        && apt-get clean
+
+    # CRAN packages
+    R -e "install.packages(c(
+        'ggplot2',
+        'cowplot',
+        'patchwork',
+        'ggpubr',
+        'gridExtra',
+        'dplyr',
+        'tidyr',
+        'data.table',
+        'readr',
+        'reshape2',
+        'viridis',
+        'scales',
+        'RColorBrewer',
+        'igraph',
+        'ggraph',
+        'tidygraph',
+        'svglite',
+        'ragg',
+        'Cairo',
+        'extrafont',
+        'showtext',
+        'optparse'
+    ), repos='https://cloud.r-project.org')"
+
+    # Bioconductor packages
+    R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')"
+    R -e "BiocManager::install(c(
+        'ggtree',
+        'treeio',
+        'ape',
+        'phytools'
+    ), ask=FALSE, update=FALSE)"
+
+%runscript
+    exec R "$@"

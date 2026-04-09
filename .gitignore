@@ -1,13 +1,20 @@
 
-# Do not track datasets
+# Ignore datasets
 input_datasets
 
-# Do not track results
+# Ignore results
 quinn.90.*
 prev_run
 diff*.txt
 positive.*
 negative.*
 sim_*
+*taxa
+tree.*
+eval.all.*
+subset_quinn.*
+
+# Ignore built containers
+*.sif
 
 

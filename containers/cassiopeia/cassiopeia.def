@@ -1,0 +1,42 @@
+BootStrap: docker
+From: python:3.10-slim
+
+%labels
+    Description "Python 3.10 and Cassiopeia with other basic python package dependencies and some bash commands installed."
+
+%files
+    cassiopeia.def /opt/cassiopeia/cassiopeia.def
+
+%post
+    set -eux
+
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        less \
+        vim \
+        nano \
+        procps \
+        wget \
+        curl \
+        ca-certificates \
+        time && \
+        rm -rf /var/lib/apt/lists/*
+
+    # Install Cassiopeia
+    pip install git+https://github.com/YosefLab/Cassiopeia@master#egg=cassiopeia-lineage
+    
+    # Install other dependencies
+    pip install umi_tools ete3 numpy scipy
+
+%environment
+    export PATH="/usr/local/bin:$PATH"
+
+%runscript
+    exec "$@"
+
+
+
+
+
