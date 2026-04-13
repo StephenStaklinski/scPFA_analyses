@@ -13,6 +13,7 @@ sim_*
 tree.*
 eval.all.*
 subset_quinn.*
+sim.*
 
 # Ignore built containers
 *.sif
