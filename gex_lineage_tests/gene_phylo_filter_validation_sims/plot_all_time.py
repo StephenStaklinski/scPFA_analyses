@@ -26,9 +26,9 @@ output_pdf = sys.argv[2]
 method_order = ["path", "moran", "lrt_full", "lrt_lambda"]
 method_labels = {
     "path": "PATH",
-    "moran": "Moran's I",
-    "lrt_full": "LRT Full",
-    "lrt_lambda": "LRT Pagel's Lambda",
+    "moran": "PATH re-implementation",
+    "lrt_full": "LRT full covariance",
+    "lrt_lambda": "LRT Pagel's lambda covariance",
 }
 
 # Colorblind-safe palette

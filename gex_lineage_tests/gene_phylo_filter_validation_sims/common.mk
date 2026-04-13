@@ -16,7 +16,8 @@ CASSIOPEIA_SIF := $(CONTAINERS)/cassiopeia/cassiopeia.sif
 PATH_SIF := $(CONTAINERS)/path/path.sif
 
 TREES := $(shell seq -f tree.%.0f.true.nex 1 $(NSAMP))
-EXPRS := $(shell seq -f tree.%.0f.true.expr.tsv 1 $(NSAMP))
+EXPRSPOS := $(shell seq -f tree.%.0f.true.pos.expr.tsv 1 $(NSAMP))
+EXPRSNEG := $(shell seq -f tree.%.0f.true.neg.expr.tsv 1 $(NSAMP))
 LAMBDATSVSPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.lambda.tsv 1 $(NSAMP))
 LAMBDATSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.lrt.lambda.tsv 1 $(NSAMP))
 LAMBDATIMESPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.lambda.time 1 $(NSAMP))
@@ -39,7 +40,7 @@ DESIRED_TIP_VAR := 5.0
 
 all: eval.all.performance.txt eval.all.time.txt
 
-simulate: $(TREES) $(EXPRS)
+simulate: $(TREES) $(EXPRSPOS) $(EXPRSNEG)
 lambda: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG)
 full: $(FULLTSVSPOS) $(FULLTSVSNEG)
 moran: $(MORANTSVSPOS) $(MORANTSVSNEG)
@@ -160,19 +161,21 @@ tree.%.neg.correlation.path.tsv tree.%.neg.correlation.path.time: tree.%.true.ne
 		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.neg.correlation.path.tsv
 
 # Gather all results to one performance summary file, assuming matched pos and neg results
-eval.all.performance.txt: $(LAMBDATSVSSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FULLTSVSNEG) $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG)
+eval.all.performance.txt: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FULLTSVSNEG) $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\tTP\tFN\tTN\tFP\n"; \
-		for f in $(LAMBDATSVSSPOS) $(FULLTSVSPOS) $(MORANTSVSPOS) $(PATHTSVSPOS); do \
+		for f in $(LAMBDATSVSPOS) $(FULLTSVSPOS) $(MORANTSVSPOS) $(PATHTSVSPOS); do \
 			ntaxa=$(NTAXA); \
-			method=$$(basename "$$f" | cut -d"." -f4- | sed 's/\.term//' | tr '.' '_'); \
+			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.tsv//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
-			pos_neg=$$(basename "$$f" | cut -d"." -f3); \
-			awk -v ntaxa="$$ntaxa" -v method="$$method" -v sim_num="$$sim_num" '\
-				/positives simulated:/ { tp=$$5; gsub(/,/, "", tp); fn=$$7 } \
-				/negatives simulated:/ { tn=$$5; gsub(/,/, "", tn); fp=$$8 } \
-				END { print ntaxa "\t" method "\t" sim_num "\t" tp "\t" fn "\t" tn "\t" fp }\
-			' "$$f"; \
+			sed -i 's/TRUE/True/g; s/FALSE/False/g' "$$f"; \
+			tp=$$(awk -F"\t" 'NR>1 && $$NF=="True" { count++ } END { print count+0 }' "$$f"); \
+			fn=$$(awk -F"\t" 'NR>1 && $$NF=="False" { count++ } END { print count+0 }' "$$f"); \
+			negf=$$(echo "$$f" | sed 's/\.pos\./\.neg\./'); \
+			sed -i 's/TRUE/True/g; s/FALSE/False/g' "$$negf"; \
+			tn=$$(awk -F"\t" 'NR>1 && $$NF=="False" { count++ } END { print count+0 }' "$$negf"); \
+			fp=$$(awk -F"\t" 'NR>1 && $$NF=="True" { count++ } END { print count+0 }' "$$negf"); \
+			echo -e "$$ntaxa\t$$method\t$$sim_num\t$$tp\t$$fn\t$$tn\t$$fp"; \
 		done; \
 	} > $@
 
@@ -182,7 +185,7 @@ eval.all.time.txt: $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) $(FULLTIMESPOS) $(FULLTIM
 		printf "ntaxa\tmethod\tsim_num\ttime_sec\n"; \
 		for f in $(LAMBDATIMESPOS) $(FULLTIMESPOS) $(MORANTIMESPOS) $(PATHTIMESPOS); do \
 			ntaxa=$(NTAXA); \
-			method=$$(basename "$$f" | cut -d"." -f4- | sed 's/\.time//' | tr '.' '_'); \
+			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.time//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
 			time_sec_pos=$$(head -n 1 "$$f" | cut -d" " -f1 | sed 's/user//g'); \
 			negf=$$(echo "$$f" | sed 's/\.pos\./\.neg\./'); \
