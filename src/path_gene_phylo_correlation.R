@@ -10,9 +10,6 @@ tree_file <- args[1]
 expr_file <- args[2]
 out_file  <- args[3]
 
-padj_thresh <- 0.05
-z_thresh    <- 0.0
-
 # Read tree; supports Newick or Nexus by extension
 tree <- if (grepl("\\.(nex|nexus)$", tree_file, ignore.case = TRUE)) {
   ape::read.nexus(tree_file)
@@ -55,7 +52,7 @@ if (length(missing_in_expr) > 0) {
 expr_mat <- expr_mat[tree$tip.label, , drop = FALSE]
 
 # Build phylogenetic weight matrix.
-Winv <- PATH::inv_tree_dist(tree, node = TRUE, norm = FALSE)
+Winv <- PATH::inv_tree_dist(tree, node = FALSE, norm = FALSE)
 
 # Compute phylogenetic correlations
 xc <- PATH::xcor(expr_mat, Winv)
@@ -74,12 +71,9 @@ results <- data.frame(
   z_score = z_score,
   p_value = p_value,
   padj = padj,
-  pass = (padj < padj_thresh) & (z_score > z_thresh),
+  pass = (padj < 0.05),
   stringsAsFactors = FALSE
 )
-
-# # Order by strongest positive phylogenetic signal
-# results <- results[order(-results$z_score), ]
 
 write.table(
   results,

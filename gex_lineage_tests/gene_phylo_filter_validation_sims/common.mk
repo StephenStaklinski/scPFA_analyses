@@ -1,6 +1,6 @@
 export SHELL=/usr/bin/bash
 
-.PRECIOUS: tree.%.true.nwk tree.%.correlation.path.tsv
+.PRECIOUS: tree.%.true.nwk tree.%.correlation.path.tsv tree.%.true.pos.expr.tsv tree.%.true.neg.expr.tsv
 
 
 GEX_LINEAGE_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage
@@ -17,24 +17,33 @@ PATH_SIF := $(CONTAINERS)/path/path.sif
 
 TREES := $(shell seq -f tree.%.0f.true.nex 1 $(NSAMP))
 EXPRS := $(shell seq -f tree.%.0f.true.expr.tsv 1 $(NSAMP))
-LAMBDATERMS := $(shell seq -f tree.%.0f.correlation.lrt.lambda.term 1 $(NSAMP))
-LAMBDATIMES := $(shell seq -f tree.%.0f.correlation.lrt.lambda.time 1 $(NSAMP))
-FULLTERMS := $(shell seq -f tree.%.0f.correlation.lrt.full.term 1 $(NSAMP))
-FULLTIMES := $(shell seq -f tree.%.0f.correlation.lrt.full.time 1 $(NSAMP))
-MORANTERMS := $(shell seq -f tree.%.0f.correlation.moran.term 1 $(NSAMP))
-MORANTIMES := $(shell seq -f tree.%.0f.correlation.moran.time 1 $(NSAMP))
-PATHTERMS := $(shell seq -f tree.%.0f.correlation.path.term 1 $(NSAMP))
-PATHTIMES := $(shell seq -f tree.%.0f.correlation.path.time 1 $(NSAMP))
+LAMBDATSVSPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.lambda.tsv 1 $(NSAMP))
+LAMBDATSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.lrt.lambda.tsv 1 $(NSAMP))
+LAMBDATIMESPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.lambda.time 1 $(NSAMP))
+LAMBDATIMESNEG := $(shell seq -f tree.%.0f.neg.correlation.lrt.lambda.time 1 $(NSAMP))
+FULLTSVSPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.full.tsv 1 $(NSAMP))
+FULLTIMESPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.full.time 1 $(NSAMP))
+FULLTSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.lrt.full.tsv 1 $(NSAMP))
+FULLTIMESNEG := $(shell seq -f tree.%.0f.neg.correlation.lrt.full.time 1 $(NSAMP))
+MORANTSVSPOS := $(shell seq -f tree.%.0f.pos.correlation.moran.tsv 1 $(NSAMP))
+MORANTIMESPOS := $(shell seq -f tree.%.0f.pos.correlation.moran.time 1 $(NSAMP))
+MORANTSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.moran.tsv 1 $(NSAMP))
+MORANTIMESNEG := $(shell seq -f tree.%.0f.neg.correlation.moran.time 1 $(NSAMP))
+PATHTSVSPOS := $(shell seq -f tree.%.0f.pos.correlation.path.tsv 1 $(NSAMP))
+PATHTIMESPOS := $(shell seq -f tree.%.0f.pos.correlation.path.time 1 $(NSAMP))
+PATHTSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.path.tsv 1 $(NSAMP))
+PATHTIMESNEG := $(shell seq -f tree.%.0f.neg.correlation.path.time 1 $(NSAMP))
 
-NSIMS := 100
+NGENES := 1000
+DESIRED_TIP_VAR := 5.0
 
 all: eval.all.performance.txt eval.all.time.txt
 
 simulate: $(TREES) $(EXPRS)
-lambda: $(LAMBDATERMS)
-full: $(FULLTERMS)
-moran: $(MORANTERMS)
-path: $(PATHTERMS)
+lambda: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG)
+full: $(FULLTSVSPOS) $(FULLTSVSNEG)
+moran: $(MORANTSVSPOS) $(MORANTSVSNEG)
+path: $(PATHTSVSPOS) $(PATHTSVSNEG)
 
 # Simulate the cell lineage trees
 tree.%.true.nwk:
@@ -53,80 +62,112 @@ tree.%.true.nex: tree.%.true.nwk
 		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.nwk \
 		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.nex
 
-# Generate a dummy gene expression matrix (required by gexLineage, though it is not used)
-tree.%.true.expr.tsv: tree.%.true.nex
-	awk 'BEGIN { inblock=0; print "cell\tdummy" } /TaxLabels/ { inblock=1; next } inblock { line=$$0; gsub(/^[ \t]+|[ \t]+$$/, "", line); has_end = (line ~ /;$$/); sub(/;$$/, "", line); if (line != "") print line "\t0"; if (has_end) inblock=0; }' $< > $@
-
-# Run the Pagel's lambda LRT phylo signal filter
-tree.%.correlation.lrt.lambda.tsv tree.%.correlation.lrt.lambda.term tree.%.correlation.lrt.lambda.time tree.%.phylo_filter_sims.expr.tsv: tree.%.true.nex tree.%.true.expr.tsv
-	/usr/bin/time -o tree.$*.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+# Simulate the positive gene expression matrix
+tree.%.true.pos.expr.tsv: tree.%.true.nex
+	${GEX_LINEAGE_DIR}/bin/gexSim \
 		--trees tree.$*.true.nex \
-		--expr tree.$*.true.expr.tsv \
-		--outprefix tree.$* \
+		--outprefix tree.$*.true.pos \
+		--n-genes $(NGENES) \
+		--desired-tip-var $(DESIRED_TIP_VAR)
+
+# Simulate the negative gene expression matrix
+tree.%.true.neg.expr.tsv: tree.%.true.nex
+	${GEX_LINEAGE_DIR}/bin/gexSim \
+		--trees tree.$*.true.nex \
+		--outprefix tree.$*.true.neg \
+		--n-genes $(NGENES) \
+		--desired-tip-var $(DESIRED_TIP_VAR) \
+		--identity-cov
+
+# Run the Pagel's lambda LRT phylo signal filter on pos sims
+tree.%.pos.correlation.lrt.lambda.tsv tree.%.pos.correlation.lrt.lambda.time: tree.%.true.nex tree.%.true.pos.expr.tsv
+	/usr/bin/time -o tree.$*.pos.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+		--trees tree.$*.true.nex \
+		--expr tree.$*.true.pos.expr.tsv \
+		--outprefix tree.$*.pos \
 		--filter-test lrt \
 		--lrt-alt lambda \
-		--sim-filter-only \
-		--write-filter-sims \
-		--n-sims $(NSIMS) \
-		--seed $$(shuf -i 1-1000000000 -n 1) > tree.$*.correlation.lrt.lambda.term
+		--filter-only \
+		--seed $$(shuf -i 1-1000000000 -n 1)
 
-# Run the full LRT phylo signal filter
-tree.%.correlation.lrt.full.tsv tree.%.correlation.lrt.full.term tree.%.correlation.lrt.full.time: tree.%.true.nex tree.%.true.expr.tsv
-	/usr/bin/time -o tree.$*.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+# Run the Pagel's lambda LRT phylo signal filter on neg sims
+tree.%.neg.correlation.lrt.lambda.tsv tree.%.neg.correlation.lrt.lambda.time: tree.%.true.nex tree.%.true.neg.expr.tsv
+	/usr/bin/time -o tree.$*.neg.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--trees tree.$*.true.nex \
-		--expr tree.$*.true.expr.tsv \
-		--outprefix tree.$* \
+		--expr tree.$*.true.neg.expr.tsv \
+		--outprefix tree.$*.neg \
+		--filter-test lrt \
+		--lrt-alt lambda \
+		--filter-only \
+		--seed $$(shuf -i 1-1000000000 -n 1)
+
+# Run the full LRT phylo signal filter on pos sims
+tree.%.pos.correlation.lrt.full.tsv tree.%.pos.correlation.lrt.full.time: tree.%.true.nex tree.%.true.pos.expr.tsv
+	/usr/bin/time -o tree.$*.pos.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+		--trees tree.$*.true.nex \
+		--expr tree.$*.true.pos.expr.tsv \
+		--outprefix tree.$*.pos \
 		--filter-test lrt \
 		--lrt-alt full \
-		--sim-filter-only \
-		--n-sims $(NSIMS) \
-		--seed $$(shuf -i 1-1000000000 -n 1) > tree.$*.correlation.lrt.full.term
+		--filter-only \
+		--seed $$(shuf -i 1-1000000000 -n 1)
 
-# Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter
-tree.%.correlation.moran.tsv tree.%.correlation.moran.term tree.%.correlation.moran.time: tree.%.true.nex tree.%.true.expr.tsv
-	/usr/bin/time -o tree.$*.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+# Run the full LRT phylo signal filter on neg sims
+tree.%.neg.correlation.lrt.full.tsv tree.%.neg.correlation.lrt.full.time: tree.%.true.nex tree.%.true.neg.expr.tsv
+	/usr/bin/time -o tree.$*.neg.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--trees tree.$*.true.nex \
-		--expr tree.$*.true.expr.tsv \
-		--outprefix tree.$* \
-		--filter-test moran \
-		--sim-filter-only \
-		--n-sims $(NSIMS) \
-		--seed $$(shuf -i 1-1000000000 -n 1) > tree.$*.correlation.moran.term
+		--expr tree.$*.true.neg.expr.tsv \
+		--outprefix tree.$*.neg \
+		--filter-test lrt \
+		--lrt-alt full \
+		--filter-only \
+		--seed $$(shuf -i 1-1000000000 -n 1)
 
-# Run PATH's implementation of the autocorrelation phylo signal filter
-tree.%.correlation.path.tsv tree.%.correlation.path.time: tree.%.phylo_filter_sims.expr.tsv
-	singularity exec --bind $(MAIN_DIR):/mnt $(PATH_SIF) /usr/bin/time -o /mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.correlation.path.time \
+# Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter on pos sims
+tree.%.pos.correlation.moran.tsv tree.%.pos.correlation.moran.time: tree.%.true.nex tree.%.true.pos.expr.tsv
+	/usr/bin/time -o tree.$*.pos.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+		--trees tree.$*.true.nex \
+		--expr tree.$*.true.pos.expr.tsv \
+		--outprefix tree.$*.pos \
+		--filter-test moran \
+		--filter-only \
+		--seed $$(shuf -i 1-1000000000 -n 1)
+
+# Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter on neg sims
+tree.%.neg.correlation.moran.tsv tree.%.neg.correlation.moran.time: tree.%.true.nex tree.%.true.neg.expr.tsv
+	/usr/bin/time -o tree.$*.neg.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+		--trees tree.$*.true.nex \
+		--expr tree.$*.true.neg.expr.tsv \
+		--outprefix tree.$*.neg \
+		--filter-test moran \
+		--filter-only \
+		--seed $$(shuf -i 1-1000000000 -n 1)
+
+# Run PATH's implementation of the autocorrelation phylo signal filter on pos sims
+tree.%.pos.correlation.path.tsv tree.%.pos.correlation.path.time: tree.%.true.pos.expr.tsv tree.%.true.nex
+	singularity exec --bind $(MAIN_DIR):/mnt $(PATH_SIF) /usr/bin/time -o /mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.pos.correlation.path.time \
 	Rscript /mnt/src/path_gene_phylo_correlation.R \
 		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.nex \
-		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.phylo_filter_sims.expr.tsv \
-		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.correlation.path.tsv
+		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.pos.expr.tsv \
+		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.pos.correlation.path.tsv
 
-# Summarize PATH results in the same format as the other methods
-tree.%.correlation.path.term: tree.%.correlation.path.tsv
-	awk -F '\t' 'BEGIN { tp=0; fn=0; tn=0; fp=0 } \
-		NR > 1 { \
-			if ($$1 ~ /^gene_/) { \
-				if ($$6 == "TRUE") tp++; \
-				else fn++; \
-			} \
-			else if ($$1 ~ /^neg_/) { \
-				if ($$6 == "TRUE") fp++; \
-				else tn++; \
-			} \
-		} \
-		END { \
-			printf "  positives simulated: %d, detected: %d, missed: %d\n", tp + fn, tp, fn; \
-			printf "  negatives simulated: %d, rejected: %d, false positives: %d\n", tn + fp, tn, fp; \
-		}' $< > $@
+# Run PATH's implementation of the autocorrelation phylo signal filter on neg sims
+tree.%.neg.correlation.path.tsv tree.%.neg.correlation.path.time: tree.%.true.neg.expr.tsv tree.%.true.nex
+	singularity exec --bind $(MAIN_DIR):/mnt $(PATH_SIF) /usr/bin/time -o /mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.neg.correlation.path.time \
+	Rscript /mnt/src/path_gene_phylo_correlation.R \
+		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.nex \
+		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.neg.expr.tsv \
+		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.neg.correlation.path.tsv
 
-# Gather all results to one performance summary file
-eval.all.performance.txt: $(LAMBDATERMS) $(FULLTERMS) $(MORANTERMS) $(PATHTERMS)
+# Gather all results to one performance summary file, assuming matched pos and neg results
+eval.all.performance.txt: $(LAMBDATSVSSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FULLTSVSNEG) $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\tTP\tFN\tTN\tFP\n"; \
-		for f in $(LAMBDATERMS) $(FULLTERMS) $(MORANTERMS) $(PATHTERMS); do \
+		for f in $(LAMBDATSVSSPOS) $(FULLTSVSPOS) $(MORANTSVSPOS) $(PATHTSVSPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f4- | sed 's/\.term//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
+			pos_neg=$$(basename "$$f" | cut -d"." -f3); \
 			awk -v ntaxa="$$ntaxa" -v method="$$method" -v sim_num="$$sim_num" '\
 				/positives simulated:/ { tp=$$5; gsub(/,/, "", tp); fn=$$7 } \
 				/negatives simulated:/ { tn=$$5; gsub(/,/, "", tn); fp=$$8 } \
@@ -135,15 +176,18 @@ eval.all.performance.txt: $(LAMBDATERMS) $(FULLTERMS) $(MORANTERMS) $(PATHTERMS)
 		done; \
 	} > $@
 
-# Gather all runtimes to one summary file
-eval.all.time.txt: $(LAMBDATIMES) $(FULLTIMES) $(MORANTIMES) $(PATHTIMES)
+# Gather all runtimes to one summary file, assuming matched pos and neg results
+eval.all.time.txt: $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) $(FULLTIMESPOS) $(FULLTIMESNEG) $(MORANTIMESPOS) $(MORANTIMESNEG) $(PATHTIMESPOS) $(PATHTIMESNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\ttime_sec\n"; \
-		for f in $(LAMBDATIMES) $(FULLTIMES) $(MORANTIMES) $(PATHTIMES); do \
+		for f in $(LAMBDATIMESPOS) $(FULLTIMESPOS) $(MORANTIMESPOS) $(PATHTIMESPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f4- | sed 's/\.time//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
-			time_sec=$$(head -n 1 "$$f" | cut -d" " -f1 | sed 's/user//g'); \
+			time_sec_pos=$$(head -n 1 "$$f" | cut -d" " -f1 | sed 's/user//g'); \
+			negf=$$(echo "$$f" | sed 's/\.pos\./\.neg\./'); \
+			time_sec_neg=$$(head -n 1 "$$negf" | cut -d" " -f1 | sed 's/user//g'); \
+			time_sec=$$(awk "BEGIN {print $$time_sec_pos + $$time_sec_neg}"); \
 			echo -e "$$ntaxa\t$$method\t$$sim_num\t$$time_sec"; \
 		done; \
 	} > $@
