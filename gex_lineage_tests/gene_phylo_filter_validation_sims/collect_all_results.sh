@@ -28,3 +28,17 @@ for file in $MAIN_DIR/*/eval.all.time.txt; do
     # Append the data from the current file, skipping the header
     tail -n +2 $file >> $OUTFILE
 done
+
+# Get all stats results
+OUTFILE=$MAIN_DIR/eval.all.tree_stats.tsv
+rm -f $OUTFILE
+
+for file in $MAIN_DIR/*/eval.all.tree_stats.tsv; do
+    if [[ ! -f $OUTFILE ]]; then
+        # Write the header from the first file
+        head -n 1 $file > $OUTFILE
+    fi
+
+    # Append the data from the current file, skipping the header
+    tail -n +2 $file >> $OUTFILE
+done

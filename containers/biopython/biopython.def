@@ -1,0 +1,39 @@
+BootStrap: docker
+From: python:3.11-slim
+
+%labels
+    Description ""
+
+%files
+    biopython.def /opt/biopython/biopython.def
+
+%post
+    set -eux
+
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        less \
+        vim \
+        nano \
+        procps \
+        wget \
+        curl \
+        ca-certificates \
+        time && \
+        rm -rf /var/lib/apt/lists/*
+
+    # Install other dependencies
+    pip install biopython matplotlib seaborn numpy pandas
+
+%environment
+    export PATH="/usr/local/bin:$PATH"
+
+%runscript
+    exec "$@"
+
+
+
+
+

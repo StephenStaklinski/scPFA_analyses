@@ -72,6 +72,9 @@ sns.barplot(
 )
 
 ax.set_xlabel("Number of taxa")
+for label in ax.get_xticklabels():
+        label.set_rotation(-30)
+        label.set_horizontalalignment("center")
 ax.set_ylabel("Runtime (s)")
 ax.set_title("")
 ax.set_yscale("log")

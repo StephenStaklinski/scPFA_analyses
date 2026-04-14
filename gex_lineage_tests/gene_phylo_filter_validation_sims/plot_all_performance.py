@@ -101,6 +101,9 @@ for ax, metric, ylabel in zip(axes, ["precision", "recall"], ["Precision", "Reca
     )
 
     ax.set_xlabel("Number of taxa")
+    for label in ax.get_xticklabels():
+        label.set_rotation(-30)
+        label.set_horizontalalignment("center")
     ax.set_ylabel(ylabel)
     ax.set_title("")
     ax.set_ylim(0, 1.05)

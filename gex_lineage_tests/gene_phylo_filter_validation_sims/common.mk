@@ -14,8 +14,10 @@ REL_PATH := gex_lineage_tests/gene_phylo_filter_validation_sims
 CONTAINERS := $(MAIN_DIR)/containers
 CASSIOPEIA_SIF := $(CONTAINERS)/cassiopeia/cassiopeia.sif
 PATH_SIF := $(CONTAINERS)/path/path.sif
+BIOPYTHON_SIF := $(CONTAINERS)/biopython/biopython.sif
 
 TREES := $(shell seq -f tree.%.0f.true.nex 1 $(NSAMP))
+TREESTATS := $(shell seq -f tree.%.0f.true.stats.tsv 1 $(NSAMP))
 EXPRSPOS := $(shell seq -f tree.%.0f.true.pos.expr.tsv 1 $(NSAMP))
 EXPRSNEG := $(shell seq -f tree.%.0f.true.neg.expr.tsv 1 $(NSAMP))
 LAMBDATSVSPOS := $(shell seq -f tree.%.0f.pos.correlation.lrt.lambda.tsv 1 $(NSAMP))
@@ -36,9 +38,9 @@ PATHTSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.path.tsv 1 $(NSAMP))
 PATHTIMESNEG := $(shell seq -f tree.%.0f.neg.correlation.path.time 1 $(NSAMP))
 
 NGENES := 1000
-DESIRED_TIP_VAR := 5.0
+DESIRED_TIP_VAR := 0.25
 
-all: eval.all.performance.txt eval.all.time.txt
+all: eval.all.performance.txt eval.all.time.txt # eval.all.tree_stats.tsv
 
 simulate: $(TREES) $(EXPRSPOS) $(EXPRSNEG)
 lambda: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG)
@@ -46,7 +48,7 @@ full: $(FULLTSVSPOS) $(FULLTSVSNEG)
 moran: $(MORANTSVSPOS) $(MORANTSVSNEG)
 path: $(PATHTSVSPOS) $(PATHTSVSNEG)
 
-# Simulate the cell lineage trees
+# Simulate the cell lineage tree
 tree.%.true.nwk:
 	singularity exec --bind $(MAIN_DIR):/mnt $(CASSIOPEIA_SIF) \
 	python /mnt/src/simulateCellTree.py \
@@ -56,7 +58,12 @@ tree.%.true.nwk:
 		--death_rate 0.005 \
 		--desired_time 54
 
-# Convert the simulated trees from Newick to Nexus format
+# Get statistics describing the simulated tree
+tree.%.true.stats.tsv: tree.%.true.nwk
+	singularity exec --bind $(MAIN_DIR):/mnt $(BIOPYTHON_SIF) \
+	python /mnt/src/tree_metrics.py /mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.nwk /mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.true.stats.tsv
+
+# Convert the simulated tree from Newick to Nexus format
 tree.%.true.nex: tree.%.true.nwk
 	singularity exec --bind $(MAIN_DIR):/mnt $(CASSIOPEIA_SIF) \
 	python /mnt/src/nwk2nex.py \
@@ -161,10 +168,12 @@ tree.%.neg.correlation.path.tsv tree.%.neg.correlation.path.time: tree.%.true.ne
 		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.neg.correlation.path.tsv
 
 # Gather all results to one performance summary file, assuming matched pos and neg results
-eval.all.performance.txt: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FULLTSVSNEG) $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG)
+# Add these files below to the for loop to include all methods
+# $(LAMBDATSVSPOS) $(FULLTSVSPOS)
+eval.all.performance.txt: $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG) # $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FULLTSVSNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\tTP\tFN\tTN\tFP\n"; \
-		for f in $(LAMBDATSVSPOS) $(FULLTSVSPOS) $(MORANTSVSPOS) $(PATHTSVSPOS); do \
+		for f in $(MORANTSVSPOS) $(PATHTSVSPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.tsv//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
@@ -180,10 +189,12 @@ eval.all.performance.txt: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FUL
 	} > $@
 
 # Gather all runtimes to one summary file, assuming matched pos and neg results
-eval.all.time.txt: $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) $(FULLTIMESPOS) $(FULLTIMESNEG) $(MORANTIMESPOS) $(MORANTIMESNEG) $(PATHTIMESPOS) $(PATHTIMESNEG)
+# Add these files below to the for loop to include all methods
+# $(LAMBDATIMESPOS) $(FULLTIMESPOS)
+eval.all.time.txt: $(MORANTIMESPOS) $(MORANTIMESNEG) $(PATHTIMESPOS) $(PATHTIMESNEG) # $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) # $(FULLTIMESPOS) $(FULLTIMESNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\ttime_sec\n"; \
-		for f in $(LAMBDATIMESPOS) $(FULLTIMESPOS) $(MORANTIMESPOS) $(PATHTIMESPOS); do \
+		for f in $(MORANTIMESPOS) $(PATHTIMESPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.time//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
@@ -195,6 +206,27 @@ eval.all.time.txt: $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) $(FULLTIMESPOS) $(FULLTIM
 		done; \
 	} > $@
 
+eval.all.tree_stats.tsv: $(TREESTATS)
+	{ \
+		first=1; \
+		for f in $(TREESTATS); do \
+			ntaxa=$(NTAXA); \
+			sim_num=$$(basename "$$f" | cut -d"." -f2); \
+			if [ "$$first" = "1" ]; then \
+				printf "ntaxa\tsim_num\t"; \
+				head -n 1 "$$f"; \
+				first=0; \
+			fi; \
+			tail -n 1 "$$f" | awk -v ntaxa="$$ntaxa" -v sim_num="$$sim_num" 'BEGIN {OFS="\t"} {print ntaxa, sim_num, $$0}'; \
+		done; \
+	} > $@
+
 clean:
 	rm -f tree.* eval.all*
+
+archive-all:
+	archive_dir=archive_$(shell date +%Y-%m-%d_%H.%M); \
+	mkdir -p $$archive_dir ; \
+	mv tree.* $$archive_dir/ ; \
+	mv eval.all* $$archive_dir/
 
