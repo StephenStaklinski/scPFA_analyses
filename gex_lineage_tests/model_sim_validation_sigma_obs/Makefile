@@ -6,15 +6,16 @@ INPUT_DATA_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchm
 TREE_FILE := ${INPUT_DATA_DIR}/quinn_CP90/quinn.90.var.nex
 
 # Specify fixed parameters across simulations
+TOTAL_TIME := 54.0
 N_GENES := 1000
-K := 5	# Number of latent factors (K) for the simulation
-SIGMA_LATENT := 2.0,1.0,0.5,0.25,0.1	# Comma-sep list of doubles of length K for the latent Brownian process noise
+DESIRED_TIP_VAR := 1.0
+K := 5	# Number of latent factorsfor the simulation
 
 # Specify the range of sigma-obs values to test
-SIGMA_OBS_VALUES := 0.01 0.5 1.0 5.0 10.0 20.0 50.0 100.0
+SIGMA_OBS_VALUES := 0.01 # 0.5 1.0 5.0 10.0 20.0 50.0 100.0
 
 # Specify how many sims to run for each condition
-N_SIMS := 5
+N_SIMS := 1
 
 SIM_IDS := $(shell seq 1 $(N_SIMS))
 RUN_STEMS := $(foreach condition,$(SIGMA_OBS_VALUES),$(foreach sim,$(SIM_IDS),$(condition)_$(sim)))
@@ -25,21 +26,23 @@ FIRST_EVAL := sim_$(FIRST_STEM).eval.summary.tsv
 EVALS := $(addprefix sim_,$(addsuffix .eval.summary.tsv, $(RUN_STEMS)))
 
 all: diff.txt
-sim: $(SIMS)
+simulate: $(SIMS)
 fit: $(FITS)
 eval: $(EVALS)
 
 # Simulate the data under the specified conditions
 sim_%.sim.summary.tsv: ${TREE_FILE}
 	stem="$*"; condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
-	${GEX_LINEAGE_DIR}/bin/gexSimulateLatent \
+	${GEX_LINEAGE_DIR}/bin/gexSim \
 		--trees ${TREE_FILE} \
 		--outprefix sim_$${condition}_$${sim_num}.sim \
-		--k ${K} \
+		--tree-total-time $(TOTAL_TIME) \
 		--n-genes ${N_GENES} \
+		--desired-tip-var ${DESIRED_TIP_VAR} \
+		--use-n-trees 0 \
+		--dim ${K} \
 		--sigma2-obs $${condition} \
-		--sigma2-latent ${SIGMA_LATENT} \
-		--seed $$(shuf -i 1-1000000000 -n 1) > sim_$${condition}_$${sim_num}.sim.term
+		--include-factorization > sim_$${condition}_$${sim_num}.sim.term
 
 # Fit the model to the simulated data
 sim_%.fit.summary.tsv: ${TREE_FILE} sim_%.sim.summary.tsv
