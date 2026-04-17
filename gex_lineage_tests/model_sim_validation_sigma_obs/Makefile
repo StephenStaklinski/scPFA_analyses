@@ -24,7 +24,7 @@ K := 5	# Number of latent factors for the simulation
 SIGMA_OBS_VALUES := 0.5 # 0.01 0.5 1.0 5.0 10.0 20.0 50.0 100.0
 
 # Specify how many sims to run for each condition
-N_SIMS := 3
+N_SIMS := 5
 
 SIM_IDS := $(shell seq 1 $(N_SIMS))
 RUN_STEMS := $(foreach condition,$(SIGMA_OBS_VALUES),$(foreach sim,$(SIM_IDS),$(condition)_$(sim)))
@@ -44,6 +44,7 @@ eval: $(EVALS)
 sim_%.sim.summary.tsv: ${TREE_FILE}
 	stem="$*"; condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
 	${GEX_LINEAGE_DIR}/bin/gexSim \
+		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees ${TREE_FILE} \
 		--outprefix sim_$${condition}_$${sim_num}.sim \
 		--tree-total-time $(TOTAL_TIME) \
@@ -58,6 +59,7 @@ sim_%.sim.summary.tsv: ${TREE_FILE}
 sim_%.fit.summary.tsv sim_%.fit.log: ${TREE_FILE} sim_%.sim.summary.tsv
 	stem="$*"; condition="$${stem%_*}"; sim_num="$${stem##*_}"; \
 	/usr/bin/time -o sim_$${condition}_$${sim_num}.fit.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees ${TREE_FILE} \
 		--expr sim_$${condition}_$${sim_num}.sim.X.tsv \
 		--outprefix sim_$${condition}_$${sim_num}.fit \
@@ -105,14 +107,16 @@ diff.txt: $(EVALS)
 	done
 
 clean:
-	rm -f sim_* diff.txt
+	rm -f sim_* diff.txt eval.all*
 
 archive-all:
 	archive_dir=archive_all_$(shell date +%Y-%m-%d_%H-%M); \
 	mkdir -p $$archive_dir; \
-	mv sim* $$archive_dir/
+	mv sim* $$archive_dir/; \
+	mv eval.all* $$archive_dir/;
 
 archive-fit:
 	archive_dir=archive_fit_$(shell date +%Y-%m-%d_%H-%M); \
 	mkdir -p $$archive_dir; \
-	mv *.fit* $$archive_dir/
+	mv *.fit* $$archive_dir/; \
+	mv eval.all* $$archive_dir/;
