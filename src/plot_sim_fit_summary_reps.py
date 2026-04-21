@@ -39,13 +39,11 @@ for fit_col in fit_cols:
 long_rows = []
 
 for _, row in df.iterrows():
-    condition = row["condition"] if "condition" in df.columns else "all"
     sim_num = row["sim_num"] if "sim_num" in df.columns else np.nan
 
     for base, fit_col, sim_col in pairs:
         long_rows.append(
             {
-                "condition": str(condition),
                 "sim_num": sim_num,
                 "metric": base,
                 "source": "fit",
@@ -54,7 +52,6 @@ for _, row in df.iterrows():
         )
         long_rows.append(
             {
-                "condition": str(condition),
                 "sim_num": sim_num,
                 "metric": base,
                 "source": "simulated",
@@ -90,7 +87,7 @@ for i, metric in enumerate(metrics):
 
     sns.boxplot(
         data=sub,
-        x="condition",
+        x="source",
         y="value",
         hue="source",
         ax=ax,
@@ -101,7 +98,7 @@ for i, metric in enumerate(metrics):
 
     sns.stripplot(
         data=sub,
-        x="condition",
+        x="source",
         y="value",
         hue="source",
         ax=ax,

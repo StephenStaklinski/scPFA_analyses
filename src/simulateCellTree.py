@@ -14,7 +14,7 @@ parser.add_argument("--out_tree", type=str, required=True, help="Output path for
 parser.add_argument("--birth_rate", type=float, default=0.4, help="Birth rate for tree process")
 parser.add_argument("--death_rate", type=float, default=0.05, help="Death rate for tree process")
 parser.add_argument("--num_tips", type=int, default=50, help="Number of tips in the tree")
-parser.add_argument("--desired_time", type=int, default=50, help="Desired time for the tree height. Note: this will lead to uniform scaling that alters the scale of birth and death rates.")
+parser.add_argument("--desired_time", type=float, default=50, help="Desired time for the tree height. Note: this will lead to uniform scaling that alters the scale of birth and death rates.")
 args = parser.parse_args()
 
 out_tree = args.out_tree
