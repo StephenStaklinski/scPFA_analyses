@@ -45,19 +45,31 @@ fit_Z_df = fit_F_df @ fit_L_df
 
 sim_F = sim_F_df.to_numpy()
 fit_F = fit_F_df.to_numpy()
+sim_Z = sim_Z_df.to_numpy()
+fit_Z = fit_Z_df.to_numpy()
+sim_X = sim_X_df.to_numpy()
+fit_X = fit_X_df.to_numpy()
 
 sim_cell_colors = np.arange(sim_F.shape[0])
 fit_cell_colors = np.arange(fit_F.shape[0])
 
 # PCA
-sim_pca = PCA(n_components=2).fit_transform(sim_F)
-fit_pca = PCA(n_components=2).fit_transform(fit_F)
+sim_F_pca = PCA(n_components=2).fit_transform(sim_F)
+fit_F_pca = PCA(n_components=2).fit_transform(fit_F)
+sim_Z_pca = PCA(n_components=2).fit_transform(sim_Z)
+fit_Z_pca = PCA(n_components=2).fit_transform(fit_Z)
+sim_X_pca = PCA(n_components=2).fit_transform(sim_X)
+fit_X_pca = PCA(n_components=2).fit_transform(fit_X)
 
 # UMAP
-sim_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(sim_F)
-fit_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_F)
+sim_F_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(sim_F)
+fit_F_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_F)
+sim_Z_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(sim_Z)
+fit_Z_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_Z)
+sim_X_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(sim_X)
+fit_X_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_X)
 
-fig, axes = plt.subplots(2, 6, figsize=(24, 8))
+fig, axes = plt.subplots(2, 10, figsize=(40, 8))
 
 # -------- top row: sim --------
 sns.heatmap(
@@ -112,15 +124,35 @@ axes[0, 3].set_title("Sim X")
 axes[0, 3].set_xlabel("Cells")
 axes[0, 3].set_ylabel("Genes")
 
-axes[0, 4].scatter(sim_pca[:, 0], sim_pca[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
+axes[0, 4].scatter(sim_F_pca[:, 0], sim_F_pca[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
 axes[0, 4].set_title("Sim F PCA")
 axes[0, 4].set_xlabel("PC1")
 axes[0, 4].set_ylabel("PC2")
 
-axes[0, 5].scatter(sim_umap[:, 0], sim_umap[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
+axes[0, 5].scatter(sim_F_umap[:, 0], sim_F_umap[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
 axes[0, 5].set_title("Sim F UMAP")
 axes[0, 5].set_xlabel("UMAP1")
 axes[0, 5].set_ylabel("UMAP2")
+
+axes[0, 6].scatter(sim_Z_pca[:, 0], sim_Z_pca[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
+axes[0, 6].set_title("Sim Z PCA")
+axes[0, 6].set_xlabel("PC1")
+axes[0, 6].set_ylabel("PC2")
+
+axes[0, 7].scatter(sim_Z_umap[:, 0], sim_Z_umap[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
+axes[0, 7].set_title("Sim Z UMAP")
+axes[0, 7].set_xlabel("UMAP1")
+axes[0, 7].set_ylabel("UMAP2")
+
+axes[0, 8].scatter(sim_X_pca[:, 0], sim_X_pca[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
+axes[0, 8].set_title("Sim X PCA")
+axes[0, 8].set_xlabel("PC1")
+axes[0, 8].set_ylabel("PC2")
+
+axes[0, 9].scatter(sim_X_umap[:, 0], sim_X_umap[:, 1], s=8, c=sim_cell_colors, cmap="viridis")
+axes[0, 9].set_title("Sim X UMAP")
+axes[0, 9].set_xlabel("UMAP1")
+axes[0, 9].set_ylabel("UMAP2")
 
 # -------- bottom row: fit --------
 sns.heatmap(
@@ -175,15 +207,35 @@ axes[1, 3].set_title("Fit X")
 axes[1, 3].set_xlabel("Cells")
 axes[1, 3].set_ylabel("Genes")
 
-axes[1, 4].scatter(fit_pca[:, 0], fit_pca[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
+axes[1, 4].scatter(fit_F_pca[:, 0], fit_F_pca[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
 axes[1, 4].set_title("Fit F PCA")
 axes[1, 4].set_xlabel("PC1")
 axes[1, 4].set_ylabel("PC2")
 
-axes[1, 5].scatter(fit_umap[:, 0], fit_umap[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
+axes[1, 5].scatter(fit_F_umap[:, 0], fit_F_umap[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
 axes[1, 5].set_title("Fit F UMAP")
 axes[1, 5].set_xlabel("UMAP1")
 axes[1, 5].set_ylabel("UMAP2")
+
+axes[1, 6].scatter(fit_Z_pca[:, 0], fit_Z_pca[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
+axes[1, 6].set_title("Fit Z PCA")
+axes[1, 6].set_xlabel("PC1")
+axes[1, 6].set_ylabel("PC2")
+
+axes[1, 7].scatter(fit_Z_umap[:, 0], fit_Z_umap[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
+axes[1, 7].set_title("Fit Z UMAP")
+axes[1, 7].set_xlabel("UMAP1")
+axes[1, 7].set_ylabel("UMAP2")
+
+axes[1, 8].scatter(fit_X_pca[:, 0], fit_X_pca[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
+axes[1, 8].set_title("Fit X PCA")
+axes[1, 8].set_xlabel("PC1")
+axes[1, 8].set_ylabel("PC2")
+
+axes[1, 9].scatter(fit_X_umap[:, 0], fit_X_umap[:, 1], s=8, c=fit_cell_colors, cmap="viridis")
+axes[1, 9].set_title("Fit X UMAP")
+axes[1, 9].set_xlabel("UMAP1")
+axes[1, 9].set_ylabel("UMAP2")
 
 plt.tight_layout()
 plt.savefig(output_file)

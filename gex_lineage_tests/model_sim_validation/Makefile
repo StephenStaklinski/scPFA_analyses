@@ -20,12 +20,12 @@ TREE_FILE := ${INPUT_DATA_DIR}/quinn_CP90/quinn.90.var.nex
 
 # Fixed parameters
 NSAMP := 10
-NTAXA := 1000
+NTAXA := 5000
 TOTAL_TIME := 1.0
-N_GENES := 1000
+N_GENES := 5000
 DESIRED_L_ROW_NORMS := 20.0,10.0,5.0,2.0,1.0
 K := 5
-SIGMA_OBS := 0.5
+SIGMA_OBS := 0.001
 
 
 SIM_IDS := $(shell seq 1 $(NSAMP))
@@ -33,13 +33,15 @@ TREES := $(shell seq -f sim.%.0f.tree.nex 1 $(NSAMP))
 SIMS := $(shell seq -f sim.%.0f.sim.summary.tsv 1 $(NSAMP))
 FITS := $(shell seq -f sim.%.0f.fit.summary.tsv 1 $(NSAMP))
 PANELFIGS := $(shell seq -f sim.%.0f.panel.png 1 $(NSAMP))
+ALIGNEDFFIGS := $(shell seq -f sim.%.0f.alignedF.png 1 $(NSAMP))
+# TREEGEXFFIGS := $(shell seq -f sim.%.0f.tree_gex_f_embeddings.png 1 $(NSAMP))
 FITS_LOG_PDFS := $(shell seq -f sim.%.0f.fit.log.pdf 1 $(NSAMP))
 FIRST_EVAL := sim.1.eval.summary.tsv
 EVALS := $(shell seq -f sim.%.0f.eval.summary.tsv 1 $(NSAMP))
 
 all: simulate fit eval
 simulate: $(TREES) $(SIMS)
-fit: $(FITS) $(FITS_LOG_PDFS) eval.all.fit.summaries.pdf $(PANELFIGS)
+fit: $(FITS) $(FITS_LOG_PDFS) eval.all.fit.summaries.pdf $(PANELFIGS) $(ALIGNEDFFIGS) # $(TREEGEXFFIGS)
 eval: $(EVALS) diff.txt
 
 # Simulate the cell lineage tree
@@ -82,7 +84,6 @@ sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.
 		--dim ${K} \
 		--no-filter \
 		--no-preprocess \
-		--L-l1-strength 0.0 \
 		--seed $$(shuf -i 1-1000000000 -n 1) > sim.$*.fit.term
 
 # Plot the fit optimization log results
@@ -100,6 +101,21 @@ sim.%.panel.png: sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv sim.%.fit.F.tsv
 			/mnt/cwd/sim.$*.fit.L.tsv \
 			/mnt/cwd/sim.$*.fit.X.tsv \
 			/mnt/cwd/sim.$*.panel.png
+
+sim.%.alignedF.png: sim.%.sim.F.tsv sim.%.fit.F.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/procrustes_align_plot_F.py \
+			/mnt/cwd/sim.$*.sim.F.tsv \
+			/mnt/cwd/sim.$*.fit.F.tsv \
+			/mnt/cwd/sim.$*.alignedF.png
+
+# sim.%.tree_gex_f_embeddings.png: sim.%.tree.nex sim.%.sim.X.tsv sim.%.fit.F.tsv
+# 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+# 		python /mnt/src/plot_tree_gex_f_embeddings.py \
+# 			/mnt/cwd/sim.$*.tree.nwk \
+# 			/mnt/cwd/sim.$*.sim.X.tsv \
+# 			/mnt/cwd/sim.$*.fit.F.tsv \
+# 			/mnt/cwd/sim.$*.tree_gex_f_embeddings.png
 
 eval.all.fit.summaries.tsv: $(FITS) $(SIMS)
 	printf "sim_num" > $@; \
@@ -142,5 +158,8 @@ archive-fit:
 	archive_dir=archive_fit_$(shell date +%Y-%m-%d_%H-%M); \
 	mkdir -p $$archive_dir; \
 	mv *.fit* $$archive_dir/; \
-	mv eval.all* $$archive_dir/; \
+	mv *.alignedF.png $$archive_dir/; \
+	mv *.panel.png $$archive_dir/; \
+	mv *.eval* $$archive_dir/; \
+	mv eval.* $$archive_dir/; \
 	mv diff.txt $$archive_dir/;
