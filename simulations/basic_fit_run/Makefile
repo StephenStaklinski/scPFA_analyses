@@ -1,7 +1,7 @@
 export SHELL=/usr/bin/bash
 
 GEX_LINEAGE_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage
-INPUT_DATA_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/gex_lineage_tests/input_datasets
+INPUT_DATA_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/data
 
 PREV_OUTPREFIX := ./prev_run/quinn.90
 

@@ -1,7 +1,7 @@
 export SHELL=/usr/bin/bash
 
 GEX_LINEAGE_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage
-INPUT_DATA_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/gex_lineage_tests/input_datasets
+INPUT_DATA_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/data
 
 RELATIVE_DATA_DIR := ${INPUT_DATA_DIR}/jiawei_phylo_signal_gene_filter_sim_data_examples_4_1_26
 

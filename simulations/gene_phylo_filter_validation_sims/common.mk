@@ -8,7 +8,7 @@ GEX_LINEAGE_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage
 # Absolute path
 MAIN_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks
 
-REL_PATH := gex_lineage_tests/gene_phylo_filter_validation_sims
+REL_PATH := simulations/gene_phylo_filter_validation_sims
 
 # Relative paths
 CONTAINERS := $(MAIN_DIR)/containers
@@ -169,11 +169,11 @@ tree.%.neg.correlation.path.tsv tree.%.neg.correlation.path.time: tree.%.true.ne
 
 # Gather all results to one performance summary file, assuming matched pos and neg results
 # Add these files below to the for loop to include all methods
-# $(LAMBDATSVSPOS) $(FULLTSVSPOS)
-eval.all.performance.txt: $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG) # $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) $(FULLTSVSPOS) $(FULLTSVSNEG)
+# $(FULLTSVSPOS)
+eval.all.performance.txt: $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG) $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) # $(FULLTSVSPOS) $(FULLTSVSNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\tTP\tFN\tTN\tFP\n"; \
-		for f in $(MORANTSVSPOS) $(PATHTSVSPOS); do \
+		for f in $(LAMBDATSVSPOS) $(MORANTSVSPOS) $(PATHTSVSPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.tsv//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
@@ -190,11 +190,11 @@ eval.all.performance.txt: $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHT
 
 # Gather all runtimes to one summary file, assuming matched pos and neg results
 # Add these files below to the for loop to include all methods
-# $(LAMBDATIMESPOS) $(FULLTIMESPOS)
-eval.all.time.txt: $(MORANTIMESPOS) $(MORANTIMESNEG) $(PATHTIMESPOS) $(PATHTIMESNEG) # $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) # $(FULLTIMESPOS) $(FULLTIMESNEG)
+# $(FULLTIMESPOS)
+eval.all.time.txt: $(MORANTIMESPOS) $(MORANTIMESNEG) $(PATHTIMESPOS) $(PATHTIMESNEG) $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) # $(FULLTIMESPOS) $(FULLTIMESNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\ttime_sec\n"; \
-		for f in $(MORANTIMESPOS) $(PATHTIMESPOS); do \
+		for f in $(LAMBDATIMESPOS) $(MORANTIMESPOS) $(PATHTIMESPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.time//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \

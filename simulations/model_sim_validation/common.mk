@@ -5,7 +5,7 @@ export SHELL=/usr/bin/bash
 
 MAIN_DIR := /home/staklins/projects/gex_lineage_project
 BENCHMARKS_DIR := $(MAIN_DIR)/gex_lineage_benchmarks
-REL_PATH := gex_lineage_tests/model_sim_validation
+REL_PATH := simulations/model_sim_validation/$(NTAXA)taxa$(NGENES)genes
 CURR_DIR := $(BENCHMARKS_DIR)/$(REL_PATH)
 
 CONTAINERS := $(BENCHMARKS_DIR)/containers
@@ -14,35 +14,23 @@ CASSIOPEIA_SIF := ${CONTAINERS}/cassiopeia/cassiopeia.sif
 
 SRC := ${BENCHMARKS_DIR}/src
 GEX_LINEAGE_DIR := $(MAIN_DIR)/gex_lineage
-INPUT_DATA_DIR := $(BENCHMARKS_DIR)/gex_lineage_tests/input_datasets
-
-TREE_FILE := ${INPUT_DATA_DIR}/quinn_CP90/quinn.90.var.nex
-
-# Fixed parameters
-NSAMP := 10
-NTAXA := 5000
-TOTAL_TIME := 1.0
-N_GENES := 5000
-DESIRED_L_ROW_NORMS := 20.0,10.0,5.0,2.0,1.0
-K := 5
-SIGMA_OBS := 0.001
 
 
 SIM_IDS := $(shell seq 1 $(NSAMP))
 TREES := $(shell seq -f sim.%.0f.tree.nex 1 $(NSAMP))
 SIMS := $(shell seq -f sim.%.0f.sim.summary.tsv 1 $(NSAMP))
 FITS := $(shell seq -f sim.%.0f.fit.summary.tsv 1 $(NSAMP))
+TIMES := $(shell seq -f sim.%.0f.fit.time 1 $(NSAMP))
 PANELFIGS := $(shell seq -f sim.%.0f.panel.png 1 $(NSAMP))
 ALIGNEDFFIGS := $(shell seq -f sim.%.0f.alignedF.png 1 $(NSAMP))
-# TREEGEXFFIGS := $(shell seq -f sim.%.0f.tree_gex_f_embeddings.png 1 $(NSAMP))
 FITS_LOG_PDFS := $(shell seq -f sim.%.0f.fit.log.pdf 1 $(NSAMP))
 FIRST_EVAL := sim.1.eval.summary.tsv
 EVALS := $(shell seq -f sim.%.0f.eval.summary.tsv 1 $(NSAMP))
 
 all: simulate fit eval
 simulate: $(TREES) $(SIMS)
-fit: $(FITS) $(FITS_LOG_PDFS) eval.all.fit.summaries.pdf $(PANELFIGS) $(ALIGNEDFFIGS) # $(TREEGEXFFIGS)
-eval: $(EVALS) diff.txt
+fit: $(FITS) $(FITS_LOG_PDFS) eval.all.fit.summaries.pdf $(PANELFIGS) $(ALIGNEDFFIGS)
+eval: $(EVALS) diff.txt eval.all.time.txt
 
 # Simulate the cell lineage tree
 sim.%.tree.nwk:
@@ -67,15 +55,15 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--trees sim.$*.tree.nex \
 		--outprefix sim.$*.sim \
 		--tree-total-time $(TOTAL_TIME) \
-		--n-genes ${N_GENES} \
+		--n-genes ${NGENES} \
 		--L-l2-norm ${DESIRED_L_ROW_NORMS} \
 		--use-n-trees -1 \
 		--dim ${K} \
-		--sigma2-obs $(SIGMA_OBS) \
+		--sigma2-obs $(SIGMA2_OBS) \
 		--include-factorization > sim.$*.sim.term
 
 # Fit the model to the simulated data
-sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
+sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
 	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees sim.$*.tree.nex \
@@ -109,14 +97,6 @@ sim.%.alignedF.png: sim.%.sim.F.tsv sim.%.fit.F.tsv
 			/mnt/cwd/sim.$*.fit.F.tsv \
 			/mnt/cwd/sim.$*.alignedF.png
 
-# sim.%.tree_gex_f_embeddings.png: sim.%.tree.nex sim.%.sim.X.tsv sim.%.fit.F.tsv
-# 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
-# 		python /mnt/src/plot_tree_gex_f_embeddings.py \
-# 			/mnt/cwd/sim.$*.tree.nwk \
-# 			/mnt/cwd/sim.$*.sim.X.tsv \
-# 			/mnt/cwd/sim.$*.fit.F.tsv \
-# 			/mnt/cwd/sim.$*.tree_gex_f_embeddings.png
-
 eval.all.fit.summaries.tsv: $(FITS) $(SIMS)
 	printf "sim_num" > $@; \
 	awk -F '\t' 'NR > 1 { printf "\t%s_fit\t%s_simulated", $$1, $$1 } END { printf "\n" }' sim.1.fit.summary.tsv >> $@; \
@@ -137,11 +117,18 @@ sim.%.eval.summary.tsv: sim.%.sim.summary.tsv sim.%.fit.summary.tsv
 		--outprefix sim.$*.eval > sim.$*.eval.term
 
 diff.txt: $(EVALS)
-	printf "sim" > $@; \
+	printf "NTAXA\tNGENES\tsim" > $@; \
 	awk -F '\t' 'NR > 1 { printf "\t%s", $$1 } END { printf "\n" }' $(FIRST_EVAL) >> $@; \
 	for sim_num in $(SIM_IDS); do \
-		printf "%s" "$$sim_num" >> $@; \
+		printf "%s\t%s\t%s" "$(NTAXA)" "$(NGENES)" "$$sim_num" >> $@; \
 		awk -F '\t' 'NR > 1 { printf "\t%s", $$2 } END { printf "\n" }' sim.$${sim_num}.eval.summary.tsv >> $@; \
+	done
+
+eval.all.time.txt: $(TIMES)
+	printf "NTAXA\tNGENES\tsim_num\tsec\n" > $@; \
+	for sim_num in $(SIM_IDS); do \
+		fit_time=$$(head -n 1 "sim.$${sim_num}.fit.time" | cut -d" " -f1 | sed 's/user//g'); \
+		printf "%s\t%s\t%s\t%s\n" "$(NTAXA)" "$(NGENES)" "$$sim_num" "$$fit_time" >> $@; \
 	done
 
 clean:

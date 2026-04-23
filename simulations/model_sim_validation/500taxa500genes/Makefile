@@ -1,0 +1,9 @@
+NSAMP := 10
+NTAXA := 500
+TOTAL_TIME := 1.0
+NGENES := 500
+DESIRED_L_ROW_NORMS := 20.0,15.0,10.0,5.0,3.0
+K := 5
+SIGMA2_OBS := 0.1
+
+include ../common.mk

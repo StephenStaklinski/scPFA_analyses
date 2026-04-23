@@ -1,6 +1,9 @@
 
 # Ignore datasets
-input_datasets
+data
+
+# Ignore copies of previous analyses
+previous_analysis
 
 # Ignore results
 quinn.90.*
