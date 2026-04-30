@@ -44,7 +44,7 @@ char_matrix.to_csv(charmatrix_path, sep='\t')
 # Write out the mutation dictionary to a tsv file
 with open(mutdict_path, 'w') as f:
     f.write("site\tindel_int\tindel_actual\n")
-    for site, indel_dict in dict_mapping:
+    for site, indel_dict in dict_mapping.items():
         for indel_int, indel_actual in indel_dict.items():
             f.write(f"{site}\t{indel_int}\t{indel_actual}\n")
 
