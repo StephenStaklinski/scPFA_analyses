@@ -20,6 +20,8 @@ sim.*
 tls*
 archive*
 *.pdf
+quinn.*
+quinn_*.*
 
 # Ignore built containers
 *.sif
