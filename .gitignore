@@ -17,6 +17,9 @@ tree.*
 eval.all.*
 subset_quinn.*
 sim.*
+tls*
+archive*
+*.pdf
 
 # Ignore built containers
 *.sif

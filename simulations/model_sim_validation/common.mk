@@ -57,7 +57,6 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--tree-total-time $(TOTAL_TIME) \
 		--n-genes ${NGENES} \
 		--L-l2-norm ${DESIRED_L_ROW_NORMS} \
-		--use-n-trees -1 \
 		--dim ${K} \
 		--sigma2-obs $(SIGMA2_OBS) \
 		--include-factorization > sim.$*.sim.term
@@ -71,8 +70,8 @@ sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.t
 		--outprefix sim.$*.fit \
 		--dim ${K} \
 		--no-filter \
-		--no-preprocess \
-		--seed $$(shuf -i 1-1000000000 -n 1) > sim.$*.fit.term
+		--verbose-log \
+		--no-preprocess > sim.$*.fit.term
 
 # Plot the fit optimization log results
 sim.%.fit.log.pdf: sim.%.fit.log

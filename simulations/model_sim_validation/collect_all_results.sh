@@ -1,5 +1,5 @@
 
-MAIN_DIR=/home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/gex_lineage_tests/model_sim_validation
+MAIN_DIR=/home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/model_sim_validation
 
 
 # Get diff files from gexEvalSim
@@ -17,6 +17,8 @@ for file in $diff_files; do
     tail -n +2 $file >> $OUTFILE
 done
 
+python $MAIN_DIR/plot_diff.py $OUTFILE $MAIN_DIR/diff.pdf
+
 # Get sim and fit summaries
 OUTFILE=$MAIN_DIR/eval.all.fit.summaries.tsv
 rm -f $OUTFILE
@@ -32,6 +34,9 @@ for file in $summary_files; do
     tail -n +2 $file >> $OUTFILE
 done
 
+python $MAIN_DIR/plot_summaries.py $OUTFILE $MAIN_DIR/summaries.pdf
+
+
 # Get runtimes
 OUTFILE=$MAIN_DIR/eval.all.time.txt
 rm -f $OUTFILE
@@ -46,3 +51,5 @@ for file in $time_files; do
     # Append the data from the current file, skipping the header
     tail -n +2 $file >> $OUTFILE
 done
+
+python $MAIN_DIR/plot_all_time.py $OUTFILE $MAIN_DIR/times.pdf

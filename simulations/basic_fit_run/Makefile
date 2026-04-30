@@ -29,6 +29,7 @@ ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTPREFIX}.gex.tsv
 		--expr subset_${OUTPREFIX}.gex.tsv \
 		--outprefix ${OUTPREFIX} \
 		--seed 1 \
+		--verbose-log \
 		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term
 
 # Compare the final objective value
