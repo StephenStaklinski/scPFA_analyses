@@ -114,10 +114,13 @@ palantir.utils.determine_multiscale_space(adata)
 
 # Palantir trajectory
 num_waypoints = min(args.num_waypoints, adata.n_obs)
-palantir_knn = min(30, adata.n_obs - 1)
-if palantir_knn < 2:
+
+# Be conservative because Palantir internally may request more neighbors
+palantir_knn = min(args.neighbors, max(2, adata.n_obs // 4))
+
+if adata.n_obs < 10:
     raise ValueError(
-        f"Not enough cells for Palantir: {adata.n_obs} cells"
+        f"Too few cells for reliable Palantir trajectory inference: {adata.n_obs} cells"
     )
 
 pr_res = palantir.core.run_palantir(

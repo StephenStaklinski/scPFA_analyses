@@ -25,8 +25,8 @@ DATA_DIR_GEX := ./data/GSE161363/GSM4905335_barcodes_genes_matrix_5k
 
 
 # Excluded in the original paper barcode quality control: 5 16 18 25 33 38 39 41 50 53 65 69 75 81 87 88 93
-# No genes pass the phylogenetic signal filter: 78
-QUINNCPS := 1 2 3 4 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 31 32 34 35 36 37 40 42 43 44 45 46 47 48 49 51 52 54 55 56 57 58 59 60 61 62 63 64 66 67 68 70 71 72 73 74 76 77 79 80 82 83 84 85 86 89 90 91 92 94 95 96 97 98 99 100
+# Ignore because they have <100 cells: 45 46 47 48 49 51 52 54 55 56 57 58 59 60 61 62 63 64 66 67 68 70 71 72 73 74 76 77 78 79 80 82 83 84 85 86 89 90 91 92 94 95 96 97 98 99 100
+QUINNCPS := 1 2 3 4 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 31 32 34 35 36 37 40 42 43 44
 
 
 CHARMATRICES := $(QUINNCPS:%=quinn_%_character_matrix.tsv)
