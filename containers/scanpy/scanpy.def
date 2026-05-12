@@ -1,0 +1,46 @@
+Bootstrap: docker
+From: python:3.11-slim
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+    export PYTHONUNBUFFERED=1
+
+%post
+    apt-get update && apt-get install -y \
+        build-essential \
+        gcc \
+        g++ \
+        gfortran \
+        git \
+        wget \
+        curl \
+        libopenblas-dev \
+        liblapack-dev \
+        libhdf5-dev \
+        libffi-dev \
+        libssl-dev \
+        libxml2-dev \
+        libz-dev \
+        cmake \
+        pkg-config \
+        && apt-get clean
+
+    pip install --upgrade pip setuptools wheel
+
+    pip install \
+        numpy \
+        scipy \
+        pandas \
+        matplotlib \
+        seaborn \
+        scikit-learn \
+        h5py \
+        scanpy \
+        anndata \
+        umap-learn \
+        leidenalg \
+        palantir
+
+%runscript
+    exec python "$@"

@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 
+import os
+
+# Prevent script from consuming all CPU cores
+N_THREADS = "1"
+os.environ["OMP_NUM_THREADS"] = N_THREADS
+os.environ["OPENBLAS_NUM_THREADS"] = N_THREADS
+os.environ["MKL_NUM_THREADS"] = N_THREADS
+os.environ["VECLIB_MAXIMUM_THREADS"] = N_THREADS
+os.environ["NUMEXPR_NUM_THREADS"] = N_THREADS
+
 import sys
 import pandas as pd
 import numpy as np

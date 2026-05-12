@@ -74,7 +74,7 @@ for label in ax.get_xticklabels():
 
 ax.set_ylabel("Runtime (s)")
 ax.set_title("")
-ax.set_yscale("log")
+# ax.set_yscale("log")
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ax.grid(axis="y", linewidth=0.5, alpha=0.3)

@@ -1,0 +1,42 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.6
+
+%labels
+    Author Stephen_Staklinski
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+
+%post
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+
+    # Install packages globally into base (no named env)
+    micromamba install -y -p /opt/conda \
+        -c conda-forge -c bioconda \
+        r-base=4.3 \
+        r-ggplot2 \
+        r-dplyr \
+        r-readr \
+        r-tibble \
+        r-stringr \
+        r-scales \
+        r-optparse \
+        bioconductor-clusterprofiler \
+        bioconductor-org.hs.eg.db \
+        bioconductor-org.mm.eg.db \
+        bioconductor-enrichplot \
+        bioconductor-ggtree \
+        bioconductor-treeio \
+        r-ape \
+        r-phytools \
+        r-forcats
+
+    # Clean cache to reduce image size
+    micromamba clean --all --yes
+
+%runscript
+    exec Rscript "$@"
