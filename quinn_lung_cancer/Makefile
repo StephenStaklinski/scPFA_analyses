@@ -31,20 +31,22 @@ QUINNCPS := 1 2 3 4 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 3
 
 CHARMATRICES := $(QUINNCPS:%=quinn_%_character_matrix.tsv)
 GEXMATS := $(QUINNCPS:%=quinn_%_gex.tsv)
-VINETREES := $(QUINNCPS:%=quinn.%.vine.nex)
-GEXLINEAGERESULTS := $(QUINNCPS:%=quinn.%.fit.summary.tsv)
-GEXLINEAGEGSEA := $(QUINNCPS:%=quinn.%.fit.L.gsea.tsv)
+VINETREES := $(QUINNCPS:%=quinn_%.vine.nex)
+GEXLINEAGERESULTS := $(QUINNCPS:%=quinn_%.fit.summary.tsv)
+GEXLINEAGEGSEA := $(QUINNCPS:%=quinn_%.fit.L.gsea.tsv)
 ORIGEMBEDDINGS := $(QUINNCPS:%=quinn_%_gex.umap.pdf)
 PALANTIRTRAJECTORIES := $(QUINNCPS:%=quinn_%_gex.palantir.pseudotime.tsv)
+FLOWTREES := $(QUINNCPS:%=quinn_%.fit.latent_flow.factor_trees.circular.pdf)
 
 
-all: prep_data run_vine gexlineage
+all: prep_data run_vine gexlineage gsea flow
 
 prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
 palantir: $(PALANTIRTRAJECTORIES)
 run_vine: $(VINETREES)
 gexlineage: $(GEXLINEAGERESULTS)
 gsea: $(GEXLINEAGEGSEA)
+flow: $(FLOWTREES)
 
 # Copy and reformat the provided character matrices
 quinn_%_character_matrix.tsv:
@@ -69,52 +71,61 @@ quinn_%_gex.palantir.pseudotime.tsv: quinn_%_gex.tsv
 		python /mnt/src/palantir_trajectory.py /mnt/cwd/quinn_$*_gex.tsv /mnt/cwd/quinn_$*_gex
 
 # Run VINE
-quinn.%.vine.log quinn.%.vine.nwk quinn.%.vine.time quinn.%.vine.mean.nwk: quinn_%_character_matrix.tsv
-	/usr/bin/time -o quinn.$*.vine.time $(VINE) -M 400 -c 100 -v 0 \
-	 -i CRISPR quinn_$*_character_matrix.tsv --logf quinn.$*.vine.log --mean quinn.$*.vine.mean.nwk > quinn.$*.vine.nwk
+quinn_%.vine.log quinn_%.vine.nwk quinn_%.vine.time quinn_%.vine.mean.nwk: quinn_%_character_matrix.tsv
+	/usr/bin/time -o quinn_$*.vine.time $(VINE) -M 400 -c 100 -v 0 \
+	 -i CRISPR quinn_$*_character_matrix.tsv --logf quinn_$*.vine.log --mean quinn_$*.vine.mean.nwk > quinn_$*.vine.nwk
 
 # Convert nwk to nexus
-quinn.%.vine.nex: quinn.%.vine.nwk
+quinn_%.vine.nex: quinn_%.vine.nwk
 	singularity exec --bind $(CURR_DIR):/mnt/cwd/ --bind $(SRC):/mnt/src $(CASSIOPEIA_SIF) \
-	python /mnt/src/nwk2nex.py /mnt/cwd/quinn.$*.vine.nwk /mnt/cwd/quinn.$*.vine.nex
+		python /mnt/src/nwk2nex.py /mnt/cwd/quinn_$*.vine.nwk /mnt/cwd/quinn_$*.vine.nex
 
 # Fit the gene expression model
-quinn.%.fit.summary.tsv quinn.%.fit.F.tsv quinn.%.fit.L.tsv quinn.%.fit.X.tsv quinn.%.fit.log: quinn.%.vine.nex quinn_%_gex.tsv
+quinn_%.fit.summary.tsv quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv quinn_%.fit.log quinn_%.fit.latent_flow.tsv: quinn_%.vine.nex quinn_%_gex.tsv
 	NTAXA=$$(wc -l < quinn_$*_gex.tsv); \
 	if [ $$NTAXA -gt 1000 ]; then \
 		FILTERTEST=moran; \
 	else \
 		FILTERTEST=lrt; \
 	fi; \
-	/usr/bin/time -o quinn.$*.fit.time ${GEXLINEAGE} \
-	--trees quinn.$*.vine.nex \
+	/usr/bin/time -o quinn_$*.fit.time ${GEXLINEAGE} \
+	--trees quinn_$*.vine.nex \
 	--expr quinn_$*_gex.tsv \
 	--tree-total-time 1.0 \
-	--outprefix quinn.$*.fit \
+	--outprefix quinn_$*.fit \
 	--filter-test $$FILTERTEST \
 	--dim 10 \
 	--varimax \
 	--L-l1-strength 1.0 \
+	--max-iter 10000 \
 	--nthreads 10 \
 	--verbose-log \
-	--seed 1 > quinn.$*.fit.term
+	--seed 1 > quinn_$*.fit.term
 
 # Plot the fit optimization log results
-quinn.%.fit.log.pdf: quinn.%.fit.log
+quinn_%.fit.log.pdf: quinn_%.fit.log
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
-		python /mnt/src/plot_optimization_log.py /mnt/cwd/quinn.$*.fit.log -1 0 /mnt/cwd/quinn.$*.fit.log
+		python /mnt/src/plot_optimization_log.py /mnt/cwd/quinn_$*.fit.log -1 0 /mnt/cwd/quinn_$*.fit.log
 
 # Plot the fit results
-quinn.%.fit.panel.png: quinn.%.fit.F.tsv quinn.%.fit.L.tsv quinn.%.fit.X.tsv
+quinn_%.fit.panel.png: quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_fit_panel.py \
-			/mnt/cwd/quinn.$*.fit.F.tsv \
-			/mnt/cwd/quinn.$*.fit.L.tsv \
-			/mnt/cwd/quinn.$*.fit.X.tsv \
-			/mnt/cwd/quinn.$*.fit.panel.png
+			/mnt/cwd/quinn_$*.fit.F.tsv \
+			/mnt/cwd/quinn_$*.fit.L.tsv \
+			/mnt/cwd/quinn_$*.fit.X.tsv \
+			/mnt/cwd/quinn_$*.fit.panel.png
 
 # Run GO BP GSEA on fitted L matrix
-quinn.%.fit.L.gsea.tsv: quinn.%.fit.L.tsv
+quinn_%.fit.L.gsea.tsv: quinn_%.fit.L.tsv
 	singularity run --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CLUSTERPROFILER_SIF) \
-		/mnt/src/run_factor_gsea.R /mnt/cwd/quinn.$*.fit.L.tsv human /mnt/cwd/quinn.$*.fit.L.gsea > quinn.$*.fit.gsea.term
+		/mnt/src/run_factor_gsea.R /mnt/cwd/quinn_$*.fit.L.tsv human /mnt/cwd/quinn_$*.fit.L.gsea > quinn_$*.fit.gsea.term
+
+# Plot the latent flow results
+quinn_%.fit.latent_flow.factor_trees.circular.pdf: quinn_%.fit.latent_flow.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_latent_flow.py \
+			/mnt/cwd/quinn_$*.fit.latent_flow.tsv \
+			/mnt/cwd/quinn_$*.fit.latent_flow
+
 

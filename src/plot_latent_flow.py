@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import math
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -17,6 +18,7 @@ UMAP_MIN_DIST = 0.3
 UMAP_RANDOM_STATE = 1
 
 CMAP = sns.color_palette("YlOrBr", as_cmap=True)
+TREE_CMAP = mpl.colormaps["RdBu_r"]
 
 ARROW_GAP_FRAC = 0.14
 ARROW_ALPHA = 0.25
@@ -31,6 +33,8 @@ VECTOR_BANDWIDTH_FRAC = 0.08
 
 FIGSIZE = (5.6, 4.7)
 AX_RECT = [0.12, 0.14, 0.68, 0.78]
+
+CIRCULAR_TREE_COLS = 5
 
 
 parser = argparse.ArgumentParser()
@@ -69,6 +73,8 @@ factor_cols = [c for c in df.columns if c.startswith("factor_")]
 if len(factor_cols) == 0:
     raise ValueError("No factor_* columns found.")
 
+df["node_id"] = df["node_id"].astype(int)
+df["parent_id"] = df["parent_id"].astype(int)
 df["is_tip"] = df["is_tip"].astype(int)
 
 root = df.loc[df["parent_id"] < 0]
@@ -327,13 +333,7 @@ def plot_colored_projection(xcol, ycol, prefix, color_col, suffix):
 
     draw_root(ax, xcol, ycol)
 
-    cbar = fig.colorbar(
-        sc,
-        ax=ax,
-        fraction=0.046,
-        pad=0.035,
-    )
-
+    cbar = fig.colorbar(sc, ax=ax, fraction=0.046, pad=0.035)
     cbar.set_label(format_label(color_col))
     format_colorbar(cbar)
     format_axis(ax, xcol, ycol, prefix)
@@ -421,21 +421,15 @@ def plot_interpolated_vector_field(xcol, ycol, prefix):
     U = np.zeros_like(GX)
     V = np.zeros_like(GY)
 
-    bandwidth = VECTOR_BANDWIDTH_FRAC * max(
-        xmax - xmin,
-        ymax - ymin,
-    )
+    bandwidth = VECTOR_BANDWIDTH_FRAC * max(xmax - xmin, ymax - ymin)
 
     for i in range(GX.shape[0]):
         for j in range(GX.shape[1]):
             dx = xm - GX[i, j]
             dy = ym - GY[i, j]
-
             dist2 = dx * dx + dy * dy
 
-            w = np.exp(
-                -0.5 * dist2 / (bandwidth * bandwidth)
-            )
+            w = np.exp(-0.5 * dist2 / (bandwidth * bandwidth))
 
             if w.sum() > 0:
                 U[i, j] = np.sum(w * u) / np.sum(w)
@@ -461,13 +455,7 @@ def plot_interpolated_vector_field(xcol, ycol, prefix):
         zorder=2,
     )
 
-    cbar = fig.colorbar(
-        stream.lines,
-        ax=ax,
-        fraction=0.046,
-        pad=0.035,
-    )
-
+    cbar = fig.colorbar(stream.lines, ax=ax, fraction=0.046, pad=0.035)
     cbar.set_label("Flow magnitude")
     format_colorbar(cbar)
 
@@ -477,6 +465,175 @@ def plot_interpolated_vector_field(xcol, ycol, prefix):
     add_root_legend(ax)
 
     fig.savefig(f"{args.out_prefix}.{prefix}.vector_field.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_circular_factor_trees():
+    node_ids = df["node_id"].astype(int).tolist()
+    root_id = int(root_row["node_id"])
+
+    children = {node_id: [] for node_id in node_ids}
+
+    for _, row in df.iterrows():
+        node_id = int(row["node_id"])
+        parent_id = int(row["parent_id"])
+
+        if parent_id >= 0:
+            children[parent_id].append(node_id)
+
+    for node_id in children:
+        children[node_id] = sorted(children[node_id])
+
+    def dfs_tip_order(node_id, ordered_tips):
+        if len(children[node_id]) == 0:
+            ordered_tips.append(node_id)
+            return
+
+        for child_id in children[node_id]:
+            dfs_tip_order(child_id, ordered_tips)
+
+    ordered_tips = []
+    dfs_tip_order(root_id, ordered_tips)
+
+    if len(ordered_tips) == 0:
+        raise ValueError("No tips found for circular tree plotting.")
+
+    theta = {}
+
+    for i, tip_id in enumerate(ordered_tips):
+        theta[tip_id] = 2.0 * np.pi * (i + 0.5) / len(ordered_tips)
+
+    def assign_internal_angles(node_id):
+        if node_id in theta:
+            return theta[node_id]
+
+        child_angles = [
+            assign_internal_angles(child_id)
+            for child_id in children[node_id]
+        ]
+
+        theta[node_id] = float(np.mean(child_angles))
+        return theta[node_id]
+
+    assign_internal_angles(root_id)
+
+    depth = dict(zip(df["node_id"].astype(int), df["tree_depth"].astype(float)))
+    max_depth = max(depth.values())
+
+    if max_depth <= 0:
+        raise ValueError("Maximum tree_depth must be > 0 for circular tree plotting.")
+
+    radius = {
+        node_id: depth[node_id] / max_depth
+        for node_id in node_ids
+    }
+
+    node_lookup = df.set_index("node_id")
+
+    n_factors = len(factor_cols)
+    n_cols = min(CIRCULAR_TREE_COLS, n_factors)
+    n_rows = math.ceil(n_factors / CIRCULAR_TREE_COLS)
+
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(3.1 * n_cols, 3.45 * n_rows),
+        subplot_kw={"projection": "polar"},
+    )
+
+    axes = np.atleast_1d(axes).ravel()
+
+    for ax_idx, factor_col in enumerate(factor_cols):
+        ax = axes[ax_idx]
+
+        values = dict(
+            zip(
+                df["node_id"].astype(int),
+                df[factor_col].astype(float),
+            )
+        )
+
+        factor_abs = max(
+            float(np.nanmax(np.abs(df[factor_col].to_numpy(float)))),
+            1e-12,
+        )
+
+        norm = mpl.colors.TwoSlopeNorm(
+            vmin=-factor_abs,
+            vcenter=0.0,
+            vmax=factor_abs,
+        )
+
+        for child_id in node_ids:
+            parent_id = int(node_lookup.loc[child_id, "parent_id"])
+
+            if parent_id < 0:
+                continue
+
+            parent_theta = theta[parent_id]
+            child_theta = theta[child_id]
+
+            parent_r = radius[parent_id]
+            child_r = radius[child_id]
+
+            edge_value = 0.5 * (values[parent_id] + values[child_id])
+            color = TREE_CMAP(norm(edge_value))
+
+            if abs(child_theta - parent_theta) > 1e-12 and parent_r > 0:
+                arc_theta = np.linspace(parent_theta, child_theta, 32)
+                arc_r = np.full_like(arc_theta, parent_r)
+
+                ax.plot(
+                    arc_theta,
+                    arc_r,
+                    color=color,
+                    linewidth=1.05,
+                    alpha=0.95,
+                    solid_capstyle="round",
+                )
+
+            radial_r = np.linspace(parent_r, child_r, 32)
+            radial_theta = np.full_like(radial_r, child_theta)
+
+            ax.plot(
+                radial_theta,
+                radial_r,
+                color=color,
+                linewidth=1.05,
+                alpha=0.95,
+                solid_capstyle="round",
+            )
+
+        ax.set_theta_direction(-1)
+        ax.set_theta_offset(np.pi / 2.0)
+        ax.set_ylim(0, 1.03)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.grid(False)
+        ax.spines["polar"].set_visible(False)
+        ax.set_title(format_label(factor_col), pad=8)
+
+        sm = mpl.cm.ScalarMappable(norm=norm, cmap=TREE_CMAP)
+        sm.set_array([])
+
+        cbar = fig.colorbar(
+            sm,
+            ax=ax,
+            fraction=0.045,
+            pad=0.03,
+        )
+
+        cbar.set_label("", fontsize=8)
+        cbar.ax.tick_params(labelsize=7)
+        format_colorbar(cbar)
+
+    for ax in axes[n_factors:]:
+        ax.axis("off")
+
+    fig.savefig(
+        f"{args.out_prefix}.factor_trees.circular.pdf",
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
 
@@ -511,3 +668,5 @@ for prefix, xcol, ycol in [
         ycol,
         prefix,
     )
+
+plot_circular_factor_trees()
