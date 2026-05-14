@@ -524,7 +524,7 @@ def plot_landscape_combined():
                 cbar.ax.tick_params(labelsize=7)
                 cbar.outline.set_visible(False)
 
-    fig.savefig(f"{args.out_prefix}.landscape_combined.pdf", bbox_inches="tight")
+    fig.savefig(f"{args.out_prefix}.embedding_landscapes.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -593,13 +593,11 @@ def _draw_factor_tree_trajectories(ax, factor_col, time_col):
     )
 
 
-def plot_factor_landscapes(prefix):
+def plot_factor_landscapes():
     """Plot one factor-vs-tree-depth landscape panel for each latent factor.
 
     Each panel uses factor value on the x-axis, tree depth on the y-axis, and a
     smoothed density background computed from all nodes in that same plot space.
-    The prefix only controls whether the output is named as the PCA or UMAP
-    factor-landscape file; the plotted factor-depth landscapes are identical.
     """
     time_col = "tree_depth"
     _ensure_parent_time_col(time_col)
@@ -685,7 +683,7 @@ def plot_factor_landscapes(prefix):
         left=0.055, right=0.93, bottom=0.09, top=0.92,
         wspace=0.34, hspace=0.50,
     )
-    fig.savefig(f"{args.out_prefix}.{prefix}.factor_landscapes.pdf", bbox_inches="tight")
+    fig.savefig(f"{args.out_prefix}.factor_landscapes.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -814,5 +812,4 @@ for prefix, xcol, ycol in [
 
 plot_circular_factor_trees()
 plot_landscape_combined()
-plot_factor_landscapes("pca")
-plot_factor_landscapes("umap")
+plot_factor_landscapes()
