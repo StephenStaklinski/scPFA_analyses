@@ -10,6 +10,7 @@ CASSIOPEIA_SIF := $(CONTAINERS)/cassiopeia/cassiopeia.sif
 PYPLOTTING_SIF := ${CONTAINERS}/pyplotting/pyplotting.sif
 SCANPY_SIF := ${CONTAINERS}/scanpy/scanpy.sif
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
+MONOCLE_SIF := ${CONTAINERS}/monocle/monocle.sif
 VINE := /home/staklins/projects/vine_project/vine/bin/vine
 GEXLINEAGE := /home/staklins/projects/gex_lineage_project/gex_lineage/bin/gexLineage
 
@@ -26,13 +27,22 @@ VINETREES := tls1.vine.nex tls2.vine.nex
 GEXLINEAGERESULTS := tls1.fit.summary.tsv tls2.fit.summary.tsv
 ORIGEMBEDDINGS := tls1_gex.umap.pdf tls2_gex.umap.pdf
 PALANTIRTRAJECTORIES := tls1_gex.palantir.pseudotime.tsv tls2_gex.palantir.pseudotime.tsv
+MONOCLETRAJECTORIES := tls1_gex.monocle.pseudotime.pdf tls2_gex.monocle.pseudotime.pdf
+LOGPLOTS := tls1.fit.log.pdf tls2.fit.log.pdf
+PANELPLOTS := tls1.fit.panel.png tls2.fit.panel.png
+GEXLINEAGEGSEA := tls1.fit.L.gsea.tsv tls2.fit.L.gsea.tsv
+FACTORHEATMAPS := tls1.fit.L.factor_heatmap.pdf tls2.fit.L.factor_heatmap.pdf
+FLOWTREES := tls1.fit.latent_flow.factor_trees.circular.pdf tls2.fit.latent_flow.factor_trees.circular.pdf
+EUCLIDEANPSEUDOTIME := tls1.fit.euclidean_factor_pseudotime.pdf tls2.fit.euclidean_factor_pseudotime.pdf
 
 all: prep_data run_vine
 
 prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
 palantir: $(PALANTIRTRAJECTORIES)
+monocle: $(MONOCLETRAJECTORIES)
 run_vine: $(VINETREES)
 gexlineage: $(GEXLINEAGERESULTS)
+plotting: $(LOGPLOTS) $(PANELPLOTS) $(GEXLINEAGEGSEA) $(FACTORHEATMAPS) $(FLOWTREES) $(EUCLIDEANPSEUDOTIME)
 
 # Obtain the TLS1 character matrix
 tls1_character_matrix.tsv tls1_mutation_dict.tsv: $(TLS1_PATH)/allele_table.txt
@@ -70,6 +80,11 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(SCANPY_SIF) \
 		python /mnt/src/palantir_trajectory.py /mnt/cwd/$*_gex.tsv /mnt/cwd/$*_gex
 
+# Get gex trajectories with monocle
+%_gex.monocle.pseudotime.pdf: %_gex.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(MONOCLE_SIF) \
+		Rscript /mnt/src/monocle_trajectory.R /mnt/cwd/$*_gex.tsv /mnt/cwd/$*_gex
+
 # Run VINE on the character matrices to infer lineage trees
 %.vine.nwk: %_character_matrix.tsv
 	/usr/bin/time -o $*.vine.time $(VINE) -M 400 -c 100 -v 0 \
@@ -81,7 +96,7 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	python /mnt/src/nwk2nex.py /mnt/cwd/$*.vine.nwk /mnt/cwd/$*.vine.nex
 
 # Fit the gene expression model
-%.fit.summary.tsv %.fit.F.tsv %.fit.L.tsv %.fit.X.tsv %.fit.log: %.vine.nex %_gex.tsv
+%.fit.summary.tsv %.fit.F.tsv %.fit.L.tsv %.fit.X.tsv %.fit.log %.fit.latent_flow.tsv: %.vine.nex %_gex.tsv
 	/usr/bin/time -o $*.fit.time ${GEXLINEAGE} \
 	--trees $*.vine.nex \
 	--expr $*_gex.tsv \
@@ -91,7 +106,8 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	--dim 10 \
 	--varimax \
 	--L-l1-strength 1.0 \
-	--nthreads 20 \
+	--max-iter 10000 \
+	--nthreads 1 \
 	--verbose-log \
 	--seed 1 > $*.fit.term
 
@@ -114,3 +130,25 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	singularity run --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CLUSTERPROFILER_SIF) \
 		/mnt/src/run_factor_gsea.R /mnt/cwd/$*.fit.L.tsv mouse /mnt/cwd/$*.fit.L.gsea > $*.fit.gsea.term
 
+# Plot the factor heatmap
+%.fit.L.factor_heatmap.pdf: %.fit.L.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_factor_heatmap.py \
+			/mnt/cwd/$*.fit.L.tsv \
+			/mnt/cwd/$*.fit.L.factor_heatmap.pdf
+
+# Plot the latent flow results
+%.fit.latent_flow.factor_trees.circular.pdf %.fit.latent_flow.total_euclidean_distance.tsv: %.fit.latent_flow.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_latent_flow.py \
+			/mnt/cwd/$*.fit.latent_flow.tsv \
+			/mnt/cwd/$*.fit.latent_flow
+
+# Plot euclidean latent-factor pseudotime on gex-only PCA/UMAP embeddings
+%.fit.euclidean_factor_pseudotime.pdf: %.fit.latent_flow.total_euclidean_distance.tsv %_gex.pca.tsv %_gex.umap.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_factor_euclidean_distance_pseudotime.py \
+			/mnt/cwd/$*_gex.pca.tsv \
+			/mnt/cwd/$*_gex.umap.tsv \
+			/mnt/cwd/$*.fit.latent_flow.total_euclidean_distance.tsv \
+			/mnt/cwd/$*.fit.latent_flow

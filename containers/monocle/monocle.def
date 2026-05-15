@@ -1,0 +1,51 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.6
+
+%labels
+    Author Stephen_Staklinski
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+
+%post
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+
+    # Install Monocle3 + dependencies into base environment
+    micromamba install -y -p /opt/conda \
+        -c conda-forge -c bioconda \
+        r-base=4.3 \
+        r-matrix \
+        r-ggplot2 \
+        r-dplyr \
+        r-readr \
+        r-tibble \
+        r-stringr \
+        r-scales \
+        r-optparse \
+        r-patchwork \
+        r-devtools \
+        r-remotes \
+        r-monocle3 \
+        r-biocmanager \
+        r-terra \
+        bioconductor-singlecellexperiment \
+        bioconductor-biocgenerics \
+        bioconductor-biocparallel \
+        bioconductor-delayedarray \
+        bioconductor-summarizedexperiment \
+        bioconductor-biocneighbors \
+        bioconductor-biocsingular \
+        bioconductor-batchelor \
+        bioconductor-scater \
+        bioconductor-scran \
+        umap-learn
+
+    # Clean cache to reduce image size
+    micromamba clean --all --yes
+
+%runscript
+    exec Rscript "$@"

@@ -31,6 +31,7 @@ ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTPREFIX}.gex.tsv
 		--seed 1 \
 		--verbose-log \
 		--varimax \
+		--nthreads 1 \
 		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term
 
 # Compare the final objective value

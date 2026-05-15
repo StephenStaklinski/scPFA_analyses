@@ -117,6 +117,18 @@ root_f = root.iloc[0][factor_cols].to_numpy(float)
 F = df[factor_cols].to_numpy(float)
 
 df["latent_distance_from_root"] = np.linalg.norm(F - root_f[None, :], axis=1)
+total_dist_df = df[["node_name", "latent_distance_from_root"]].copy()
+total_dist_df = total_dist_df.rename(
+    columns={
+        "node_name": "cell",
+        "latent_distance_from_root": "total_euclidean_distance",
+    }
+)
+total_dist_df.to_csv(
+    f"{args.out_prefix}.total_euclidean_distance.tsv",
+    sep="\t",
+    index=False,
+)
 
 reducer = umap.UMAP(
     n_neighbors=UMAP_N_NEIGHBORS,
@@ -699,7 +711,7 @@ def plot_embedding_landscapes():
             fraction=0.045,
             pad=0.030,
         )
-        cbar.set_label("abs(Δ latent / branch length)" if USE_ABSOLUTE_RATES else "Δ latent / branch length", fontsize=7)
+        cbar.set_label(f"abs(Δ {xlabel} / branch length)" if USE_ABSOLUTE_RATES else f"Δ {xlabel} / branch length", fontsize=7)
         cbar.ax.tick_params(labelsize=6)
         cbar.outline.set_visible(False)
 
@@ -946,7 +958,7 @@ def plot_factor_landscapes():
             fraction=0.045,
             pad=0.030,
         )
-        cbar.set_label("abs(Δ latent / branch length)" if USE_ABSOLUTE_RATES else "Δ latent / branch length", fontsize=8)
+        cbar.set_label(f"abs(Δ {format_label(factor_col)} / branch length)" if USE_ABSOLUTE_RATES else f"Δ {format_label(factor_col)} / branch length", fontsize=8)
         cbar.ax.tick_params(labelsize=6)
         cbar.outline.set_visible(False)
 
@@ -978,8 +990,8 @@ def plot_factor_landscapes():
         _draw_factor_tree_trajectories(ax, factor_col, time_col)
         ax.set_xlim(float(xedges[0]), float(xedges[-1]))
         ax.set_ylim(float(yedges[-1]), float(yedges[0]))
-        ax.set_title(format_label(factor_col), fontsize=10, pad=8)
-        ax.set_xlabel("Factor value", fontsize=9, labelpad=5)
+        ax.set_title("", fontsize=10, pad=8)
+        ax.set_xlabel(format_label(factor_col), fontsize=9, labelpad=5)
         ax.set_ylabel(format_label(time_col), fontsize=9, labelpad=6)
         ax.tick_params(labelsize=8)
         sns.despine(ax=ax)

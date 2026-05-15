@@ -15,6 +15,7 @@ CASSIOPEIA_SIF := $(CONTAINERS)/cassiopeia/cassiopeia.sif
 PYPLOTTING_SIF := ${CONTAINERS}/pyplotting/pyplotting.sif
 SCANPY_SIF := ${CONTAINERS}/scanpy/scanpy.sif
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
+MONOCLE_SIF := ${CONTAINERS}/monocle/monocle.sif
 VINE := /home/staklins/projects/vine_project/vine/bin/vine
 GEXLINEAGE := /home/staklins/projects/gex_lineage_project/gex_lineage/bin/gexLineage
 
@@ -26,27 +27,32 @@ DATA_DIR_GEX := ./data/GSE161363/GSM4905335_barcodes_genes_matrix_5k
 
 # Excluded in the original paper barcode quality control: 5 16 18 25 33 38 39 41 50 53 65 69 75 81 87 88 93
 # Ignore because they have <100 cells: 45 46 47 48 49 51 52 54 55 56 57 58 59 60 61 62 63 64 66 67 68 70 71 72 73 74 76 77 78 79 80 82 83 84 85 86 89 90 91 92 94 95 96 97 98 99 100
-QUINNCPS := 1 2 3 4 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 31 32 34 35 36 37 40 42 43 44
+QUINNCPS := 1 2 3 4 # 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 31 32 34 35 36 37 40 42 43 44
 
 
 CHARMATRICES := $(QUINNCPS:%=quinn_%_character_matrix.tsv)
 GEXMATS := $(QUINNCPS:%=quinn_%_gex.tsv)
 VINETREES := $(QUINNCPS:%=quinn_%.vine.nex)
 GEXLINEAGERESULTS := $(QUINNCPS:%=quinn_%.fit.summary.tsv)
+LOGPLOTS := $(QUINNCPS:%=quinn_%.fit.log.pdf)
+PANELPLOTS := $(QUINNCPS:%=quinn_%.fit.panel.png)
 GEXLINEAGEGSEA := $(QUINNCPS:%=quinn_%.fit.L.gsea.tsv)
+FACTORHEATMAPS := $(QUINNCPS:%=quinn_%.fit.L.factor_heatmap.pdf)
 ORIGEMBEDDINGS := $(QUINNCPS:%=quinn_%_gex.umap.pdf)
 PALANTIRTRAJECTORIES := $(QUINNCPS:%=quinn_%_gex.palantir.pseudotime.tsv)
+MONOCLETRAJECTORIES := $(QUINNCPS:%=quinn_%_gex.monocle.pseudotime.pdf)
 FLOWTREES := $(QUINNCPS:%=quinn_%.fit.latent_flow.factor_trees.circular.pdf)
+EUCLIDEANPSEUDOTIME := $(QUINNCPS:%=quinn_%.fit.euclidean_factor_pseudotime.umap.pdf)
 
 
-all: prep_data run_vine gexlineage gsea flow
+all: prep_data run_vine gexlineage plotting
 
 prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
 palantir: $(PALANTIRTRAJECTORIES)
+monocle: $(MONOCLETRAJECTORIES)
 run_vine: $(VINETREES)
 gexlineage: $(GEXLINEAGERESULTS)
-gsea: $(GEXLINEAGEGSEA)
-flow: $(FLOWTREES)
+plotting: $(LOGPLOTS) $(PANELPLOTS) $(GEXLINEAGEGSEA) $(FACTORHEATMAPS) $(FLOWTREES) $(EUCLIDEANPSEUDOTIME)
 
 # Copy and reformat the provided character matrices
 quinn_%_character_matrix.tsv:
@@ -69,6 +75,11 @@ quinn_%_gex.pca.pdf quinn_%_gex.umap.pdf quinn_%_gex.pca.tsv quinn_%_gex.umap.ts
 quinn_%_gex.palantir.pseudotime.tsv: quinn_%_gex.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(SCANPY_SIF) \
 		python /mnt/src/palantir_trajectory.py /mnt/cwd/quinn_$*_gex.tsv /mnt/cwd/quinn_$*_gex
+
+# Get gex trajectories with monocle
+quinn_%_gex.monocle.pseudotime.pdf: quinn_%_gex.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(MONOCLE_SIF) \
+		Rscript /mnt/src/monocle_trajectory.R /mnt/cwd/quinn_$*_gex.tsv /mnt/cwd/quinn_$*_gex
 
 # Run VINE
 quinn_%.vine.log quinn_%.vine.nwk quinn_%.vine.time quinn_%.vine.mean.nwk: quinn_%_character_matrix.tsv
@@ -98,7 +109,7 @@ quinn_%.fit.summary.tsv quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv qu
 	--varimax \
 	--L-l1-strength 1.0 \
 	--max-iter 10000 \
-	--nthreads 10 \
+	--nthreads 1 \
 	--verbose-log \
 	--seed 1 > quinn_$*.fit.term
 
@@ -121,11 +132,26 @@ quinn_%.fit.L.gsea.tsv: quinn_%.fit.L.tsv
 	singularity run --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CLUSTERPROFILER_SIF) \
 		/mnt/src/run_factor_gsea.R /mnt/cwd/quinn_$*.fit.L.tsv human /mnt/cwd/quinn_$*.fit.L.gsea > quinn_$*.fit.gsea.term
 
+# Plot the factor heatmap
+quinn_%.fit.L.factor_heatmap.pdf: quinn_%.fit.L.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_factor_heatmap.py \
+			/mnt/cwd/quinn_$*.fit.L.tsv \
+			/mnt/cwd/quinn_$*.fit.L.factor_heatmap.pdf
+
 # Plot the latent flow results
-quinn_%.fit.latent_flow.factor_trees.circular.pdf: quinn_%.fit.latent_flow.tsv
+quinn_%.fit.latent_flow.factor_trees.circular.pdf quinn_%.fit.latent_flow.total_euclidean_distance.tsv: quinn_%.fit.latent_flow.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_latent_flow.py \
 			/mnt/cwd/quinn_$*.fit.latent_flow.tsv \
 			/mnt/cwd/quinn_$*.fit.latent_flow
 
+# Plot euclidean latent-factor pseudotime on gex-only PCA/UMAP embeddings
+quinn_%.fit.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow.total_euclidean_distance.tsv quinn_%_gex.pca.tsv quinn_%_gex.umap.tsv
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_factor_euclidean_distance_pseudotime.py \
+			/mnt/cwd/quinn_$*_gex.pca.tsv \
+			/mnt/cwd/quinn_$*_gex.umap.tsv \
+			/mnt/cwd/quinn_$*.fit.latent_flow.total_euclidean_distance.tsv \
+			/mnt/cwd/quinn_$*.fit.latent_flow
 
