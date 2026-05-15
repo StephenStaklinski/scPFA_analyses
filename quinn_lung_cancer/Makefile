@@ -140,7 +140,7 @@ quinn_%.fit.L.factor_heatmap.pdf: quinn_%.fit.L.tsv
 			/mnt/cwd/quinn_$*.fit.L.factor_heatmap.pdf
 
 # Plot the latent flow results
-quinn_%.fit.latent_flow.factor_trees.circular.pdf quinn_%.fit.latent_flow.total_euclidean_distance.tsv: quinn_%.fit.latent_flow.tsv
+quinn_%.fit.latent_flow.factor_trees.pdf quinn_%.fit.latent_flow.total_euclidean_distance.tsv: quinn_%.fit.latent_flow.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_latent_flow.py \
 			/mnt/cwd/quinn_$*.fit.latent_flow.tsv \
