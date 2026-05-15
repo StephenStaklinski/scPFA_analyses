@@ -47,12 +47,26 @@ LANDSCAPE_TRAJ_LW = 0.7
 LANDSCAPE_TRAJ_ALPHA = 0.55
 
 FACTOR_LANDSCAPE_COLS = 5
-FACTOR_DENSITY_BINS = 80
-FACTOR_DENSITY_SMOOTH_SIGMA = 2.0
-FACTOR_DENSITY_CMAP = "YlOrBr"
-FACTOR_DENSITY_ALPHA = 0.92
-FACTOR_NODE_SIZE = 7
-FACTOR_TIP_SIZE = 12
+FACTOR_RATE_BINS = 90
+FACTOR_RATE_SMOOTH_SIGMA = 1.5
+RATE_EDGE_SAMPLES_PER_BIN = 2
+RATE_EDGE_SAMPLES_MAX = 80
+
+# Set to True for absolute transition speed: |delta| / branch_length.
+# Set to False for signed transition velocity: delta / branch_length.
+# Signed mode uses a diverging blue-white-red color scale centered at 0.
+USE_ABSOLUTE_RATES = False
+
+# Set to True to overlay tree trajectories and node points on transition landscape plots.
+# Set to False to show only the smoothed transition-rate background.
+SHOW_TREE_LINES_ON_LANDSCAPES = True
+
+FACTOR_RATE_CMAP_ABS = "YlOrRd"
+FACTOR_RATE_CMAP_SIGNED = "RdBu_r"
+FACTOR_RATE_CMAP = FACTOR_RATE_CMAP_ABS if USE_ABSOLUTE_RATES else FACTOR_RATE_CMAP_SIGNED
+FACTOR_RATE_ALPHA = 0.92
+FACTOR_NODE_SIZE = 6
+FACTOR_TIP_SIZE = 10
 
 
 parser = argparse.ArgumentParser()
@@ -121,7 +135,7 @@ root_row = df.loc[df["parent_id"] < 0].iloc[0]
 
 df.to_csv(f"{args.out_prefix}.latent_tree_nodes.umap.tsv", sep="\t", index=False)
 
-parent_df = df[["node_id", "pc1", "pc2", "umap1", "umap2"] + factor_cols].copy()
+parent_df = df[["node_id", "pc1", "pc2", "umap1", "umap2", "latent_distance_from_root"] + factor_cols].copy()
 parent_df = parent_df.rename(
     columns={
         "node_id": "parent_id",
@@ -129,6 +143,7 @@ parent_df = parent_df.rename(
         "pc2": "parent_pc2",
         "umap1": "parent_umap1",
         "umap2": "parent_umap2",
+        "latent_distance_from_root": "parent_latent_distance_from_root",
         **{c: f"parent_{c}" for c in factor_cols},
     }
 )
@@ -446,119 +461,365 @@ def _style_landscape_ax(ax, x_col, time_col):
     sns.despine(ax=ax)
 
 
-def plot_landscape_combined():
-    time_cols = ["tree_depth", "latent_distance_from_root"]
-    embedding_configs = [
-        ("pca", "pc1", "pc2"),
-        ("umap", "umap1", "umap2"),
-    ]
+def _segment_rate_grid(x_parent, x_child, y_parent, y_child, rate, x_all, y_all):
+    """Build a smoothed transition-rate grid by painting rates along edges.
 
-    for time_col in time_cols:
-        _ensure_parent_time_col(time_col)
-
-    col_configs = [
-        (time_cols[0], False),
-        (time_cols[0], True),
-        (time_cols[1], False),
-        (time_cols[1], True),
-    ]
-
-    grids = {}
-    norms = {}
-    for prefix, x_col, z_col in embedding_configs:
-        for time_col in time_cols:
-            grids[(prefix, time_col)] = _build_landscape_grid(x_col, time_col, z_col)
-
-        # Use a shared colour scale within each embedding row. This keeps the two
-        # PCA panels comparable to each other and the two UMAP panels comparable
-        # to each other without forcing PC2 and UMAP2 onto the same numeric scale.
-        vabs = float(np.nanpercentile(
-            np.abs(np.concatenate([
-                grids[(prefix, time_col)][4].ravel()
-                for time_col in time_cols
-            ])),
-            98,
-        ))
-        if not np.isfinite(vabs) or vabs <= 0:
-            vabs = 1.0
-        norms[prefix] = mpl.colors.Normalize(vmin=-vabs, vmax=vabs)
-
-    fig = plt.figure(figsize=(20, 10))
-    gs = fig.add_gridspec(
-        2, 4,
-        hspace=0.30, wspace=0.30,
-        left=0.05, right=0.94, top=0.95, bottom=0.07,
+    Each branch contributes its rate along the full line segment between its
+    parent and child coordinates, rather than only at the branch midpoint. This
+    makes long transitions appear as continuous high-rate corridors in the
+    landscape.
+    """
+    valid = (
+        np.isfinite(x_parent) & np.isfinite(x_child)
+        & np.isfinite(y_parent) & np.isfinite(y_child)
+        & np.isfinite(rate)
     )
+    x_parent = x_parent[valid]
+    x_child = x_child[valid]
+    y_parent = y_parent[valid]
+    y_child = y_child[valid]
+    rate = rate[valid]
 
-    for row_idx, (prefix, x_col, z_col) in enumerate(embedding_configs):
-        norm = norms[prefix]
-
-        for col_idx, (time_col, show_surface) in enumerate(col_configs):
-            gx, gy, GX, GY, GZ = grids[(prefix, time_col)]
-            ax = fig.add_subplot(gs[row_idx, col_idx])
-
-            if show_surface:
-                im = ax.pcolormesh(
-                    GX, GY, GZ,
-                    cmap=LANDSCAPE_CMAP_OBJ,
-                    norm=norm,
-                    shading="gouraud",
-                    rasterized=True,
-                    zorder=1,
-                )
-                ax.contour(
-                    GX, GY, GZ,
-                    levels=10,
-                    colors="0.3",
-                    linewidths=0.3,
-                    alpha=0.35,
-                    zorder=2,
-                )
-
-            _draw_tree_trajectories_landscape(ax, x_col, time_col)
-            _style_landscape_ax(ax, x_col, time_col)
-
-            if show_surface:
-                cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.88)
-                cbar.set_label(z_col.upper(), fontsize=8)
-                cbar.ax.tick_params(labelsize=7)
-                cbar.outline.set_visible(False)
-
-    fig.savefig(f"{args.out_prefix}.embedding_landscapes.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-
-
-def _factor_density_grid(factor_col, time_col):
-    """Build a smoothed 2-D density landscape for all nodes in factor-depth space."""
-    x = df[factor_col].to_numpy(float)
-    y = df[time_col].to_numpy(float)
-
-    xmin = float(np.nanmin(x))
-    xmax = float(np.nanmax(x))
-    ymin = float(np.nanmin(y))
-    ymax = float(np.nanmax(y))
+    xmin = float(np.nanmin(x_all))
+    xmax = float(np.nanmax(x_all))
+    ymin = float(np.nanmin(y_all))
+    ymax = float(np.nanmax(y_all))
 
     xpad = 0.10 * (xmax - xmin) if xmax > xmin else 0.5
     ypad = 0.10 * (ymax - ymin) if ymax > ymin else 0.5
 
-    xedges = np.linspace(xmin - xpad, xmax + xpad, FACTOR_DENSITY_BINS + 1)
-    yedges = np.linspace(ymin - ypad, ymax + ypad, FACTOR_DENSITY_BINS + 1)
+    xedges = np.linspace(xmin - xpad, xmax + xpad, FACTOR_RATE_BINS + 1)
+    yedges = np.linspace(ymin - ypad, ymax + ypad, FACTOR_RATE_BINS + 1)
 
-    # Use every node: internal nodes + tips. This is the density background.
-    H, _, _ = np.histogram2d(x, y, bins=[xedges, yedges])
-    H = gaussian_filter(H, sigma=FACTOR_DENSITY_SMOOTH_SIGMA)
+    xbin = float(xedges[1] - xedges[0])
+    ybin = float(yedges[1] - yedges[0])
 
-    # Convert from raw bin counts to a relative density in [0, 1]. This gives an
-    # intuitive color scale shared across panels: 0 = sparse, 1 = densest region.
-    hmax = float(np.nanmax(H))
-    if np.isfinite(hmax) and hmax > 0:
-        H = H / hmax
+    xs = []
+    ys = []
+    rs = []
 
-    return xedges, yedges, H.T
+    for xp, xc, yp, yc, r in zip(x_parent, x_child, y_parent, y_child, rate):
+        dx_bins = abs(xc - xp) / max(xbin, 1e-12)
+        dy_bins = abs(yc - yp) / max(ybin, 1e-12)
+
+        # Use more samples for longer projected branches so the rate is painted
+        # along the full visible trajectory rather than collapsed to one point.
+        n_samples = int(np.ceil(max(dx_bins, dy_bins) * RATE_EDGE_SAMPLES_PER_BIN)) + 1
+        n_samples = max(2, min(RATE_EDGE_SAMPLES_MAX, n_samples))
+
+        t = np.linspace(0.0, 1.0, n_samples)
+        xs.append(xp + t * (xc - xp))
+        ys.append(yp + t * (yc - yp))
+        rs.append(np.full(n_samples, r, dtype=float))
+
+    if len(xs) == 0:
+        return xedges, yedges, np.full((FACTOR_RATE_BINS, FACTOR_RATE_BINS), np.nan).T
+
+    xs = np.concatenate(xs)
+    ys = np.concatenate(ys)
+    rs = np.concatenate(rs)
+
+    # Local weighted average: smooth(sum(rate)) / smooth(number of samples).
+    # This estimates local transition rate along tree trajectories, not node
+    # density or edge density. In signed mode, positive and negative rates can
+    # cancel locally, which is intended because the color shows net direction.
+    rate_sum, _, _ = np.histogram2d(xs, ys, bins=[xedges, yedges], weights=rs)
+    rate_count, _, _ = np.histogram2d(xs, ys, bins=[xedges, yedges])
+
+    rate_sum = gaussian_filter(rate_sum, sigma=FACTOR_RATE_SMOOTH_SIGMA)
+    rate_count = gaussian_filter(rate_count, sigma=FACTOR_RATE_SMOOTH_SIGMA)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rate_grid = rate_sum / rate_count
+
+    rate_grid[rate_count <= 1e-8] = np.nan
+
+    return xedges, yedges, rate_grid.T
+
+
+def _component_rate_grid(component_col, time_col):
+    """Build a smoothed component-specific transition-rate landscape.
+
+    Each branch is sampled along its full segment in component-depth space. The
+    value painted along the segment is either the absolute rate of change or
+    the signed velocity of that plotted component, depending on
+    USE_ABSOLUTE_RATES:
+
+        absolute: |component_child - component_parent| / branch_length
+        signed:    (component_child - component_parent) / branch_length
+
+    This avoids collapsing long branches to a single midpoint and makes the
+    background show continuous transition corridors.
+    """
+    _add_edge_rate_columns()
+
+    parent_component_col = f"parent_{component_col}"
+    parent_time_col = f"parent_{time_col}"
+
+    x_parent = edges[parent_component_col].to_numpy(float)
+    x_child = edges[component_col].to_numpy(float)
+    y_parent = edges[parent_time_col].to_numpy(float)
+    y_child = edges[time_col].to_numpy(float)
+
+    branch_len = edges["branch_length"].to_numpy(float)
+    comp_delta = x_child - x_parent
+    rate = comp_delta / branch_len
+    if USE_ABSOLUTE_RATES:
+        rate = np.abs(rate)
+
+    return _segment_rate_grid(
+        x_parent=x_parent,
+        x_child=x_child,
+        y_parent=y_parent,
+        y_child=y_child,
+        rate=rate,
+        x_all=df[component_col].to_numpy(float),
+        y_all=df[time_col].to_numpy(float),
+    )
+
+
+def _draw_component_tree_trajectories(ax, component_col, time_col):
+    if not SHOW_TREE_LINES_ON_LANDSCAPES:
+        return
+
+    parent_component_col = f"parent_{component_col}"
+
+    for _, e in edges.iterrows():
+        ax.plot(
+            [e[parent_component_col], e[component_col]],
+            [e[f"parent_{time_col}"], e[time_col]],
+            color=LANDSCAPE_TRAJ_COLOR,
+            lw=LANDSCAPE_TRAJ_LW,
+            alpha=0.45,
+            solid_capstyle="round",
+            zorder=3,
+        )
+
+    internal = df[df["is_tip"] == 0]
+    tips = df[df["is_tip"] == 1]
+
+    ax.scatter(
+        internal[component_col], internal[time_col],
+        color="0.20", s=FACTOR_NODE_SIZE, alpha=0.18,
+        linewidths=0, rasterized=True, zorder=4,
+    )
+    ax.scatter(
+        tips[component_col], tips[time_col],
+        color="0.05", s=FACTOR_TIP_SIZE, alpha=0.30,
+        linewidths=0, rasterized=True, zorder=5,
+    )
+    ax.scatter(
+        root_row[component_col], root_row[time_col],
+        s=ROOT_SIZE, color=ROOT_COLOR,
+        edgecolors="white", linewidths=0.6, zorder=10,
+    )
+
+
+def plot_embedding_landscapes():
+    """Plot latent-distance, PCA, and UMAP depth landscapes colored by rate.
+
+    This replaces the older embedding landscape plot. The figure has five
+    panels in a single row:
+
+        Latent distance   PC1   PC2   UMAP1   UMAP2
+
+    Each panel uses the corresponding coordinate on the x-axis and tree depth
+    on the y-axis. The background color is the smoothed branch-wise rate of
+    change for that same coordinate. In absolute mode this is speed; in signed
+    mode this is directional velocity:
+
+        absolute: |coordinate_child - coordinate_parent| / branch_length
+        signed:    (coordinate_child - coordinate_parent) / branch_length
+
+    The latent-distance panel shows where lineages rapidly move farther from
+    or closer to the root in the full latent factor space.
+    """
+    time_col = "tree_depth"
+    _ensure_parent_time_col(time_col)
+    _add_edge_rate_columns()
+
+    component_configs = [
+        ("Latent distance", "latent_distance_from_root", "Latent distance"),
+        ("PC1", "pc1", "PC1"),
+        ("PC2", "pc2", "PC2"),
+        ("UMAP1", "umap1", "UMAP1"),
+        ("UMAP2", "umap2", "UMAP2"),
+    ]
+
+    fig, axes = plt.subplots(
+        1, 5,
+        figsize=(3.35 * 5, 3.35),
+        squeeze=False,
+    )
+
+    fig.subplots_adjust(
+        left=0.045,
+        right=0.985,
+        bottom=0.20,
+        top=0.86,
+        wspace=0.50,
+    )
+
+    for ax, (title, component_col, xlabel) in zip(axes.ravel(), component_configs):
+        xedges, yedges, rate_grid = _component_rate_grid(component_col, time_col)
+
+        finite_vals = rate_grid[np.isfinite(rate_grid)]
+        if len(finite_vals) == 0:
+            vmax = 1.0
+        else:
+            if USE_ABSOLUTE_RATES:
+                vmax = float(np.nanpercentile(finite_vals, 98))
+            else:
+                vmax = float(np.nanpercentile(np.abs(finite_vals), 98))
+            if not np.isfinite(vmax) or vmax <= 0:
+                vmax = 1.0
+
+        if USE_ABSOLUTE_RATES:
+            norm = mpl.colors.Normalize(vmin=0.0, vmax=vmax)
+            cmap = FACTOR_RATE_CMAP_ABS
+        else:
+            norm = mpl.colors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+            cmap = FACTOR_RATE_CMAP_SIGNED
+
+        masked_rate = np.ma.masked_invalid(rate_grid)
+
+        im = ax.pcolormesh(
+            xedges, yedges, masked_rate,
+            cmap=cmap,
+            norm=norm,
+            shading="auto",
+            alpha=FACTOR_RATE_ALPHA,
+            rasterized=True,
+            zorder=1,
+        )
+
+        cbar = fig.colorbar(
+            im,
+            ax=ax,
+            fraction=0.045,
+            pad=0.030,
+        )
+        cbar.set_label("abs(Δ latent / branch length)" if USE_ABSOLUTE_RATES else "Δ latent / branch length", fontsize=7)
+        cbar.ax.tick_params(labelsize=6)
+        cbar.outline.set_visible(False)
+
+        xcenters = 0.5 * (xedges[:-1] + xedges[1:])
+        ycenters = 0.5 * (yedges[:-1] + yedges[1:])
+        if len(finite_vals) > 0:
+            if USE_ABSOLUTE_RATES:
+                contour_levels = np.linspace(0.25 * vmax, 0.9 * vmax, 4)
+                contour_levels = contour_levels[contour_levels < np.nanmax(finite_vals)]
+            else:
+                pos_levels = np.linspace(0.35 * vmax, 0.9 * vmax, 3)
+                neg_levels = -pos_levels[::-1]
+                contour_levels = np.concatenate([neg_levels, pos_levels])
+                contour_levels = contour_levels[
+                    (contour_levels > np.nanmin(finite_vals))
+                    & (contour_levels < np.nanmax(finite_vals))
+                ]
+            if len(contour_levels) > 0:
+                ax.contour(
+                    xcenters, ycenters, rate_grid,
+                    levels=contour_levels,
+                    colors="0.25",
+                    linewidths=0.35,
+                    alpha=0.35,
+                    zorder=2,
+                )
+
+        _draw_component_tree_trajectories(ax, component_col, time_col)
+        ax.set_xlim(float(xedges[0]), float(xedges[-1]))
+        ax.set_ylim(float(yedges[-1]), float(yedges[0]))
+        ax.set_title("", fontsize=10, pad=8)
+        ax.set_xlabel(xlabel, fontsize=9, labelpad=5)
+        ax.set_ylabel(format_label(time_col), fontsize=9, labelpad=6)
+        ax.tick_params(labelsize=8)
+        sns.despine(ax=ax)
+
+    fig.savefig(f"{args.out_prefix}.embedding_transition_landscapes.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+def _add_edge_rate_columns():
+    """Compute branch-wise movement rates in latent factor space.
+
+    Each edge is assigned a transition rate:
+        ||F_child - F_parent||_2 / branch_length
+
+    where branch_length is estimated from the change in tree_depth between the
+    parent and child node. This gives a local speed of latent-state movement
+    along the lineage tree.
+    """
+    if "latent_transition_rate" in edges.columns:
+        return
+
+    if "parent_tree_depth" not in edges.columns:
+        _ensure_parent_time_col("tree_depth")
+
+    branch_len = (
+        edges["tree_depth"].to_numpy(float)
+        - edges["parent_tree_depth"].to_numpy(float)
+    )
+
+    # Protect against zero-length branches. These should be rare, but using NaN
+    # avoids creating artificial infinite rates.
+    branch_len = np.where(branch_len > 1e-12, branch_len, np.nan)
+
+    child_f = edges[factor_cols].to_numpy(float)
+    parent_f = edges[[f"parent_{c}" for c in factor_cols]].to_numpy(float)
+    latent_step = np.linalg.norm(child_f - parent_f, axis=1)
+
+    edges["branch_length"] = branch_len
+    edges["latent_transition_rate"] = latent_step / branch_len
+
+    for factor_col in factor_cols:
+        edges[f"{factor_col}_velocity"] = (
+            edges[factor_col].to_numpy(float)
+            - edges[f"parent_{factor_col}"].to_numpy(float)
+        ) / branch_len
+
+
+def _factor_rate_grid(factor_col, time_col):
+    """Build a smoothed factor-specific transition-rate landscape.
+
+    Each branch is sampled along its full segment in factor-depth space. The
+    value painted along the segment is either the absolute transition speed or
+    signed transition velocity for this factor only, depending on
+    USE_ABSOLUTE_RATES:
+
+        absolute: |factor_child - factor_parent| / branch_length
+        signed:    (factor_child - factor_parent) / branch_length
+
+    This makes long transitions appear as continuous rate corridors rather
+    than as isolated midpoint hotspots.
+    """
+    _add_edge_rate_columns()
+
+    parent_factor_col = f"parent_{factor_col}"
+    parent_time_col = f"parent_{time_col}"
+
+    x_parent = edges[parent_factor_col].to_numpy(float)
+    x_child = edges[factor_col].to_numpy(float)
+    y_parent = edges[parent_time_col].to_numpy(float)
+    y_child = edges[time_col].to_numpy(float)
+    rate = edges[f"{factor_col}_velocity"].to_numpy(float)
+    if USE_ABSOLUTE_RATES:
+        rate = np.abs(rate)
+
+    return _segment_rate_grid(
+        x_parent=x_parent,
+        x_child=x_child,
+        y_parent=y_parent,
+        y_child=y_child,
+        rate=rate,
+        x_all=df[factor_col].to_numpy(float),
+        y_all=df[time_col].to_numpy(float),
+    )
 
 
 def _draw_factor_tree_trajectories(ax, factor_col, time_col):
+    if not SHOW_TREE_LINES_ON_LANDSCAPES:
+        return
+
     parent_factor_col = f"parent_{factor_col}"
 
     for _, e in edges.iterrows():
@@ -567,23 +828,23 @@ def _draw_factor_tree_trajectories(ax, factor_col, time_col):
             [e[f"parent_{time_col}"], e[time_col]],
             color=LANDSCAPE_TRAJ_COLOR,
             lw=LANDSCAPE_TRAJ_LW,
-            alpha=LANDSCAPE_TRAJ_ALPHA,
+            alpha=0.45,
             solid_capstyle="round",
             zorder=3,
         )
 
-    # Light point overlay so the density remains the visual focus.
+    # Light point overlay for topology/context; the rate landscape remains the focus.
     internal = df[df["is_tip"] == 0]
     tips = df[df["is_tip"] == 1]
 
     ax.scatter(
         internal[factor_col], internal[time_col],
-        color="0.25", s=FACTOR_NODE_SIZE, alpha=0.20,
+        color="0.20", s=FACTOR_NODE_SIZE, alpha=0.18,
         linewidths=0, rasterized=True, zorder=4,
     )
     ax.scatter(
         tips[factor_col], tips[time_col],
-        color="0.05", s=FACTOR_TIP_SIZE, alpha=0.35,
+        color="0.05", s=FACTOR_TIP_SIZE, alpha=0.30,
         linewidths=0, rasterized=True, zorder=5,
     )
     ax.scatter(
@@ -594,13 +855,22 @@ def _draw_factor_tree_trajectories(ax, factor_col, time_col):
 
 
 def plot_factor_landscapes():
-    """Plot one factor-vs-tree-depth landscape panel for each latent factor.
+    """Plot factor-depth landscapes colored by factor-specific transition rate.
 
-    Each panel uses factor value on the x-axis, tree depth on the y-axis, and a
-    smoothed density background computed from all nodes in that same plot space.
+    Each panel shows one latent factor on the x-axis and tree depth on the
+    y-axis. The background color is the smoothed branch-wise rate of change for
+    that same factor. In absolute mode this is speed; in signed mode this is
+    directional velocity:
+
+        absolute: |factor_child - factor_parent| / branch_length
+        signed:    (factor_child - factor_parent) / branch_length
+
+    Absolute mode highlights where a latent program changes rapidly. Signed
+    mode distinguishes increasing factor values from decreasing factor values.
     """
     time_col = "tree_depth"
     _ensure_parent_time_col(time_col)
+    _add_edge_rate_columns()
 
     n_factors = len(factor_cols)
     n_cols = min(FACTOR_LANDSCAPE_COLS, n_factors)
@@ -608,55 +878,102 @@ def plot_factor_landscapes():
 
     fig, axes = plt.subplots(
         n_rows, n_cols,
-        figsize=(3.25 * n_cols + 0.8, 3.2 * n_rows),
+        # Extra width and spacing are needed because each panel gets its own
+        # colorbar. This makes the rate scale independent for each factor.
+        figsize=(3.55 * n_cols, 3.25 * n_rows),
         squeeze=False,
     )
 
     fig.subplots_adjust(
-        left=0.06,
-        right=0.92,
-        bottom=0.07,
-        top=0.94,
-        wspace=0.34,
-        hspace=0.48,
+        left=0.05,
+        right=0.98,
+        bottom=0.08,
+        top=0.93,
+        wspace=0.52,
+        hspace=0.56,
     )
     axes = axes.ravel()
 
-    density_grids = {
-        factor_col: _factor_density_grid(factor_col, time_col)
+    rate_grids = {
+        factor_col: _factor_rate_grid(factor_col, time_col)
         for factor_col in factor_cols
     }
 
-    norm = mpl.colors.Normalize(vmin=0.0, vmax=1.0)
-    last_im = None
-
     for ax_idx, factor_col in enumerate(factor_cols):
         ax = axes[ax_idx]
-        xedges, yedges, H = density_grids[factor_col]
+        xedges, yedges, rate_grid = rate_grids[factor_col]
 
-        last_im = ax.pcolormesh(
-            xedges, yedges, H,
-            cmap=FACTOR_DENSITY_CMAP,
+        finite_vals = rate_grid[np.isfinite(rate_grid)]
+        if len(finite_vals) == 0:
+            vmax = 1.0
+        else:
+            # Use a panel-specific scale so factors with smaller dynamic ranges
+            # still show their local transition structure clearly.
+            if USE_ABSOLUTE_RATES:
+                vmax = float(np.nanpercentile(finite_vals, 98))
+            else:
+                # Signed mode must be symmetric around zero so white always
+                # means no directional change, red means increasing factor
+                # value, and blue means decreasing factor value.
+                vmax = float(np.nanpercentile(np.abs(finite_vals), 98))
+            if not np.isfinite(vmax) or vmax <= 0:
+                vmax = 1.0
+
+        if USE_ABSOLUTE_RATES:
+            norm = mpl.colors.Normalize(vmin=0.0, vmax=vmax)
+            cmap = FACTOR_RATE_CMAP_ABS
+        else:
+            norm = mpl.colors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+            cmap = FACTOR_RATE_CMAP_SIGNED
+
+        masked_rate = np.ma.masked_invalid(rate_grid)
+
+        im = ax.pcolormesh(
+            xedges, yedges, masked_rate,
+            cmap=cmap,
             norm=norm,
             shading="auto",
-            alpha=FACTOR_DENSITY_ALPHA,
+            alpha=FACTOR_RATE_ALPHA,
             rasterized=True,
             zorder=1,
         )
 
-        # Faint contours make the density landscape easier to read without
-        # hiding the tree trajectories.
+        # Add a separate colorbar for each panel because rate magnitudes can
+        # differ substantially across factors.
+        cbar = fig.colorbar(
+            im,
+            ax=ax,
+            fraction=0.045,
+            pad=0.030,
+        )
+        cbar.set_label("abs(Δ latent / branch length)" if USE_ABSOLUTE_RATES else "Δ latent / branch length", fontsize=8)
+        cbar.ax.tick_params(labelsize=6)
+        cbar.outline.set_visible(False)
+
+        # Contours make high-rate ridges easier to see on the local scale.
         xcenters = 0.5 * (xedges[:-1] + xedges[1:])
         ycenters = 0.5 * (yedges[:-1] + yedges[1:])
-        if np.nanmax(H) > 0:
-            ax.contour(
-                xcenters, ycenters, H,
-                levels=np.linspace(0.2, 0.9, 5),
-                colors="0.25",
-                linewidths=0.3,
-                alpha=0.28,
-                zorder=2,
-            )
+        if len(finite_vals) > 0:
+            if USE_ABSOLUTE_RATES:
+                contour_levels = np.linspace(0.25 * vmax, 0.9 * vmax, 4)
+                contour_levels = contour_levels[contour_levels < np.nanmax(finite_vals)]
+            else:
+                pos_levels = np.linspace(0.35 * vmax, 0.9 * vmax, 3)
+                neg_levels = -pos_levels[::-1]
+                contour_levels = np.concatenate([neg_levels, pos_levels])
+                contour_levels = contour_levels[
+                    (contour_levels > np.nanmin(finite_vals))
+                    & (contour_levels < np.nanmax(finite_vals))
+                ]
+            if len(contour_levels) > 0:
+                ax.contour(
+                    xcenters, ycenters, rate_grid,
+                    levels=contour_levels,
+                    colors="0.25",
+                    linewidths=0.35,
+                    alpha=0.35,
+                    zorder=2,
+                )
 
         _draw_factor_tree_trajectories(ax, factor_col, time_col)
         ax.set_xlim(float(xedges[0]), float(xedges[-1]))
@@ -670,20 +987,7 @@ def plot_factor_landscapes():
     for ax in axes[n_factors:]:
         ax.axis("off")
 
-    if last_im is not None:
-        cax = fig.add_axes([0.935, 0.18, 0.015, 0.64])
-
-        cbar = fig.colorbar(last_im, cax=cax)
-        cbar.set_label("Relative node density", fontsize=9)
-        cbar.set_ticks([0.0, 0.25, 0.5, 0.75, 1.0])
-        cbar.ax.tick_params(labelsize=8)
-        cbar.outline.set_visible(False)
-
-    fig.subplots_adjust(
-        left=0.055, right=0.93, bottom=0.09, top=0.92,
-        wspace=0.34, hspace=0.50,
-    )
-    fig.savefig(f"{args.out_prefix}.factor_landscapes.pdf", bbox_inches="tight")
+    fig.savefig(f"{args.out_prefix}.factor_transition_landscapes.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -811,5 +1115,5 @@ for prefix, xcol, ycol in [
     plot_interpolated_vector_field(xcol, ycol, prefix)
 
 plot_circular_factor_trees()
-plot_landscape_combined()
+plot_embedding_landscapes()
 plot_factor_landscapes()
