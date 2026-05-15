@@ -54,12 +54,18 @@ RATE_EDGE_SAMPLES_MAX = 80
 
 # Set to True for absolute transition speed: |delta| / branch_length.
 # Set to False for signed transition velocity: delta / branch_length.
-# Signed mode uses a diverging blue-white-red color scale centered at 0.
 USE_ABSOLUTE_RATES = False
 
 # Set to True to overlay tree trajectories and node points on transition landscape plots.
-# Set to False to show only the smoothed transition-rate background.
 SHOW_TREE_LINES_ON_LANDSCAPES = True
+
+# Add compact histograms under landscape plots showing tip/final-state values.
+SHOW_TIP_DISTRIBUTION_ON_LANDSCAPES = True
+TIP_DISTRIBUTION_BINS = 75
+TIP_DISTRIBUTION_HEIGHT = 0.11
+TIP_DISTRIBUTION_Y_OFFSET = -0.35
+TIP_DISTRIBUTION_COLOR = "0.35"
+TIP_DISTRIBUTION_ALPHA = 0.65
 
 FACTOR_RATE_CMAP_ABS = "YlOrRd"
 FACTOR_RATE_CMAP_SIGNED = "RdBu_r"
@@ -554,6 +560,43 @@ def _draw_rate_landscape(ax, xedges, yedges, rate_grid, norm, cmap):
     return im
 
 
+def _draw_tip_distribution(ax, component_col, xedges):
+    if not SHOW_TIP_DISTRIBUTION_ON_LANDSCAPES:
+        return
+
+    tips = df[df["is_tip"] == 1]
+    vals = tips[component_col].to_numpy(float)
+    vals = vals[np.isfinite(vals)]
+
+    if len(vals) == 0:
+        return
+
+    hist_ax = ax.inset_axes(
+        [0.0, TIP_DISTRIBUTION_Y_OFFSET, 1.0, TIP_DISTRIBUTION_HEIGHT],
+        transform=ax.transAxes,
+    )
+
+    hist_ax.hist(
+        vals,
+        bins=TIP_DISTRIBUTION_BINS,
+        range=(float(xedges[0]), float(xedges[-1])),
+        color=TIP_DISTRIBUTION_COLOR,
+        alpha=TIP_DISTRIBUTION_ALPHA,
+        linewidth=0,
+    )
+
+    hist_ax.set_xlim(float(xedges[0]), float(xedges[-1]))
+    hist_ax.set_yticks([])
+    hist_ax.set_xticks([])
+    hist_ax.set_ylabel("")
+    hist_ax.set_xlabel("Tip distribution", fontsize=9, labelpad=5)
+    hist_ax.tick_params(axis="x", labelsize=6, length=2, pad=1)
+
+    for spine in ["top", "right", "left"]:
+        hist_ax.spines[spine].set_visible(False)
+    hist_ax.spines["bottom"].set_linewidth(0.6)
+
+
 def _component_rate_grid(component_col, time_col):
     _add_edge_rate_columns()
 
@@ -668,7 +711,7 @@ def plot_embedding_landscapes():
     fig.subplots_adjust(
         left=0.045,
         right=0.985,
-        bottom=0.20,
+        bottom=0.30,
         top=0.86,
         wspace=0.50,
     )
@@ -742,6 +785,7 @@ def plot_embedding_landscapes():
         ax.set_xlabel(xlabel, fontsize=9, labelpad=5)
         ax.set_ylabel(format_label(time_col), fontsize=9, labelpad=6)
         ax.tick_params(labelsize=8)
+        _draw_tip_distribution(ax, component_col, xedges)
         sns.despine(ax=ax)
 
     fig.savefig(f"{args.out_prefix}.embedding_transition_landscapes.pdf", bbox_inches="tight")
@@ -828,10 +872,10 @@ def plot_factor_landscapes():
     fig.subplots_adjust(
         left=0.05,
         right=0.98,
-        bottom=0.08,
+        bottom=0.13,
         top=0.93,
         wspace=0.52,
-        hspace=0.56,
+        hspace=0.78,
     )
     axes = axes.ravel()
 
@@ -910,6 +954,7 @@ def plot_factor_landscapes():
         ax.set_xlabel(format_label(factor_col), fontsize=9, labelpad=5)
         ax.set_ylabel(format_label(time_col), fontsize=9, labelpad=6)
         ax.tick_params(labelsize=8)
+        _draw_tip_distribution(ax, factor_col, xedges)
         sns.despine(ax=ax)
 
     for ax in axes[n_factors:]:

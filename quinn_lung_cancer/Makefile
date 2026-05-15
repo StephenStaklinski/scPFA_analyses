@@ -147,7 +147,7 @@ quinn_%.fit.latent_flow.factor_trees.pdf quinn_%.fit.latent_flow.total_euclidean
 			/mnt/cwd/quinn_$*.fit.latent_flow
 
 # Plot euclidean latent-factor pseudotime on gex-only PCA/UMAP embeddings
-quinn_%.fit.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow.total_euclidean_distance.tsv quinn_%_gex.pca.tsv quinn_%_gex.umap.tsv
+quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow.total_euclidean_distance.tsv quinn_%_gex.pca.tsv quinn_%_gex.umap.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_factor_euclidean_distance_pseudotime.py \
 			/mnt/cwd/quinn_$*_gex.pca.tsv \
