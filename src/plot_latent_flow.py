@@ -15,6 +15,15 @@ import pandas as pd
 import seaborn as sns
 import umap
 
+def truncate_colormap(cmap_name, minval=0.10, maxval=0.90, n=256):
+    cmap = mpl.colormaps[cmap_name]
+    colors = cmap(np.linspace(minval, maxval, n))
+    return mpl.colors.LinearSegmentedColormap.from_list(
+        f"{cmap_name}_trunc",
+        colors,
+        N=n,
+    )
+
 
 UMAP_N_NEIGHBORS = 15
 UMAP_MIN_DIST = 0.3
@@ -79,10 +88,10 @@ MAKE_WADDINGTON_STYLE_LANDSCAPES = True
 # Set True to color/scale Waddington outputs by absolute transition speed.
 # Set False to color/scale Waddington outputs by signed transition velocity.
 USE_ABSOLUTE_RATES_WADDINGTON = True
-WADDINGTON_CMAP = "Greys"
+WADDINGTON_CMAP = truncate_colormap("Greys", minval=0.05, maxval=0.85)
 WADDINGTON_ALPHA_SURF = 0.55
 WADDINGTON_SHADE_ALPHA = 0.12
-WADDINGTON_HILL_SMOOTH_SIGMA = 2.2
+WADDINGTON_HILL_SMOOTH_SIGMA = 1.5
 # In the Waddington-style view, high-rate regions are drawn as downward
 # deflections of the terrain lines. Because tree depth is plotted with root at
 # the top, adding to y makes the line dip downward visually.
@@ -99,12 +108,14 @@ WADDINGTON_DENSITY_LEDGE = True
 WADDINGTON_DENSITY_LEDGE_HEIGHT = 0.17
 WADDINGTON_DENSITY_LEDGE_BINS = 75
 WADDINGTON_DENSITY_LEDGE_SMOOTH_SIGMA = 1.0
-WADDINGTON_DENSITY_LEDGE_FACE_COLOR = "0.90"
+WADDINGTON_DENSITY_LEDGE_FACE_COLOR = "0.93"
 WADDINGTON_DENSITY_LEDGE_EDGE_COLOR = "0.35"
 WADDINGTON_DENSITY_LEDGE_LINE_COLOR = "0.45"
-WADDINGTON_DENSITY_LEDGE_ALPHA = 0.95
-WADDINGTON_DENSITY_LEDGE_LINE_ALPHA = 0.55
+WADDINGTON_DENSITY_LEDGE_ALPHA = 0.90
+WADDINGTON_DENSITY_LEDGE_LINE_ALPHA = 0.65
 WADDINGTON_DENSITY_LEDGE_LW = 0.35
+WADDINGTON_DENSITY_LEDGE_N_HORIZONTAL_LINES = 7
+WADDINGTON_DENSITY_LEDGE_VALLEY_STRENGTH = 0.72
 
 parser = argparse.ArgumentParser()
 parser.add_argument("latent_tree_nodes_tsv")
@@ -705,53 +716,108 @@ def _draw_waddington_density_ledge(ax, component_col, xedges, yedges):
     xcurve = np.r_[xmin, xcenters, xmax]
     density_curve = np.r_[0.0, density, 0.0]
 
-    # The y-axis is inverted. Larger y-values appear lower on the page, so
-    # high terminal density becomes a deeper downward valley/cut in the ledge.
-    y_density = y_front + ledge_h * density_curve
+    y_bottom = y_front + ledge_h
+    valley_depth = (
+        WADDINGTON_DENSITY_LEDGE_VALLEY_STRENGTH
+        * ledge_h
+        * density_curve
+    )
+    y_valley = np.minimum(y_front + valley_depth, y_bottom)
 
+    # Fill the full ledge as a quiet solid face. This makes the non-valley
+    # part read as the front face of the Waddington surface, not as a histogram.
+    ax.fill_between(
+        [xmin, xmax],
+        [y_front, y_front],
+        [y_bottom, y_bottom],
+        color=WADDINGTON_DENSITY_LEDGE_FACE_COLOR,
+        alpha=WADDINGTON_DENSITY_LEDGE_ALPHA,
+        linewidth=0,
+        zorder=17,
+        clip_on=True,
+    )
+
+    # Lightly open the valley area only. The horizontal lines below are then
+    # restricted to this density-defined cut, so they stay in the valley rather
+    # than running across the solid bottom ledge.
     ax.fill_between(
         xcurve,
         y_front,
-        y_density,
-        color=WADDINGTON_DENSITY_LEDGE_FACE_COLOR,
-        alpha=WADDINGTON_DENSITY_LEDGE_ALPHA,
+        y_valley,
+        color="white",
+        alpha=0.28,
         linewidth=0,
         zorder=18,
         clip_on=True,
     )
 
+    # Use the same approximate spacing as the main Waddington terrain lines,
+    # but draw only scaled copies of the density-valley outline. This keeps the
+    # spacing visually continuous while keeping the lines on the valley side.
+    dy_grid = float(np.median(np.diff(yedges)))
+    line_step = max(dy_grid * WADDINGTON_LINE_EVERY, ledge_h / 18.0)
+    baselines = np.arange(y_front + 0.55 * line_step, y_bottom, line_step)
+
+    min_visible_depth = 0.025 * ledge_h
+    inside_valley = valley_depth > min_visible_depth
+
+    for baseline in baselines:
+        level = (baseline - y_front) / ledge_h
+
+        # A scaled copy of the valley outline. Larger levels sit deeper in the
+        # ledge; masking removes lines where the density valley is too shallow.
+        y_line = y_front + level * valley_depth
+        y_line = np.minimum(y_line, y_bottom)
+
+        # Only show this line where the valley is actually deep enough to
+        # contain this level. This preserves a solid, unlined bottom outside
+        # the terminal-density valleys.
+        visible = inside_valley & (valley_depth >= level * min(ledge_h, np.nanmax(valley_depth)))
+        y_line[~visible] = np.nan
+
+        ax.plot(
+            xcurve,
+            y_line,
+            color=WADDINGTON_DENSITY_LEDGE_LINE_COLOR,
+            lw=WADDINGTON_DENSITY_LEDGE_LW,
+            alpha=WADDINGTON_DENSITY_LEDGE_LINE_ALPHA,
+            zorder=22,
+            clip_on=True,
+        )
+
+    # Soft front seam and bottom ledge boundary. The front seam is intentionally
+    # faint so the ledge feels continuous with the tree-depth landscape above.
     ax.plot(
         [xmin, xmax],
         [y_front, y_front],
         color=WADDINGTON_DENSITY_LEDGE_EDGE_COLOR,
-        lw=0.75,
-        alpha=0.90,
-        zorder=20,
+        lw=0.40,
+        alpha=0.38,
+        zorder=23,
         clip_on=True,
     )
 
     ax.plot(
-        xcurve,
-        y_density,
+        [xmin, xmax],
+        [y_bottom, y_bottom],
         color=WADDINGTON_DENSITY_LEDGE_EDGE_COLOR,
-        lw=0.75,
-        alpha=0.90,
-        zorder=20,
+        lw=0.55,
+        alpha=0.55,
+        zorder=21,
         clip_on=True,
     )
 
-    for x, d in zip(xcenters, density):
-        y_bottom = y_front + ledge_h * d
-        ax.plot(
-            [x, x],
-            [y_front, y_bottom],
-            color=WADDINGTON_DENSITY_LEDGE_LINE_COLOR,
-            lw=WADDINGTON_DENSITY_LEDGE_LW,
-            alpha=WADDINGTON_DENSITY_LEDGE_LINE_ALPHA,
-            zorder=19,
-            clip_on=True,
-        )
-
+    y_valley_edge = y_valley.copy()
+    y_valley_edge[~inside_valley] = np.nan
+    ax.plot(
+        xcurve,
+        y_valley_edge,
+        color=WADDINGTON_DENSITY_LEDGE_EDGE_COLOR,
+        lw=0.60,
+        alpha=0.72,
+        zorder=24,
+        clip_on=True,
+    )
 
 def _apply_waddington_y_limits(ax, yedges):
     y_min = float(yedges[0])
