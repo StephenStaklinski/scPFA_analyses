@@ -57,7 +57,7 @@ RATE_EDGE_SAMPLES_MAX = 80
 USE_ABSOLUTE_RATES = False
 
 # Set to True to overlay tree trajectories and node points on transition landscape plots.
-SHOW_TREE_LINES_ON_LANDSCAPES = True
+SHOW_TREE_LINES_ON_LANDSCAPES = False
 
 # Add compact histograms under landscape plots showing tip/final-state values.
 SHOW_TIP_DISTRIBUTION_ON_LANDSCAPES = True
@@ -74,6 +74,37 @@ FACTOR_RATE_ALPHA = 0.92
 FACTOR_NODE_SIZE = 6
 FACTOR_TIP_SIZE = 10
 
+MAKE_WADDINGTON_STYLE_LANDSCAPES = True
+# Separate from USE_ABSOLUTE_RATES for the standard 2D landscapes.
+# Set True to color/scale Waddington outputs by absolute transition speed.
+# Set False to color/scale Waddington outputs by signed transition velocity.
+USE_ABSOLUTE_RATES_WADDINGTON = True
+WADDINGTON_CMAP = "Greys"
+WADDINGTON_ALPHA_SURF = 0.55
+WADDINGTON_SHADE_ALPHA = 0.12
+WADDINGTON_HILL_SMOOTH_SIGMA = 2.2
+# In the Waddington-style view, high-rate regions are drawn as downward
+# deflections of the terrain lines. Because tree depth is plotted with root at
+# the top, adding to y makes the line dip downward visually.
+WADDINGTON_VALLEY_STRENGTH = 0.10
+WADDINGTON_LINE_EVERY = 2
+WADDINGTON_LINE_COLOR = "0.25"
+WADDINGTON_LINE_ALPHA = 0.28
+WADDINGTON_LINE_LW = 0.35
+
+# Waddington-specific terminal-state density ledge.
+# This replaces the separate below-axis histogram in the Waddington outputs.
+# High terminal density is drawn as a deeper downward cut at the front edge.
+WADDINGTON_DENSITY_LEDGE = True
+WADDINGTON_DENSITY_LEDGE_HEIGHT = 0.17
+WADDINGTON_DENSITY_LEDGE_BINS = 75
+WADDINGTON_DENSITY_LEDGE_SMOOTH_SIGMA = 1.0
+WADDINGTON_DENSITY_LEDGE_FACE_COLOR = "0.90"
+WADDINGTON_DENSITY_LEDGE_EDGE_COLOR = "0.35"
+WADDINGTON_DENSITY_LEDGE_LINE_COLOR = "0.45"
+WADDINGTON_DENSITY_LEDGE_ALPHA = 0.95
+WADDINGTON_DENSITY_LEDGE_LINE_ALPHA = 0.55
+WADDINGTON_DENSITY_LEDGE_LW = 0.35
 
 parser = argparse.ArgumentParser()
 parser.add_argument("latent_tree_nodes_tsv")
@@ -559,6 +590,181 @@ def _draw_rate_landscape(ax, xedges, yedges, rate_grid, norm, cmap):
     )
     return im
 
+def _scaled_relief_from_rate(rate_grid):
+    Z = np.nan_to_num(rate_grid, nan=0.0)
+    Z = gaussian_filter(np.abs(Z), sigma=WADDINGTON_HILL_SMOOTH_SIGMA)
+
+    zmax = float(np.nanpercentile(Z, 98))
+    if not np.isfinite(zmax) or zmax <= 0:
+        zmax = 1.0
+
+    Z = Z / zmax
+    Z = np.clip(Z, 0.0, 1.0)
+    return Z
+
+
+def _draw_waddington_relief_landscape(ax, xedges, yedges, rate_grid, norm, cmap):
+    """Draw a 2D Waddington-like landscape without changing the panel geometry.
+
+    The color layer is still the same signed/absolute transition-rate heatmap.
+    The extra terrain layer is only a visual guide: high-magnitude rate regions
+    create downward deflections in horizontal depth lines, so fast transitions
+    read as valley-like channels rather than hills. This keeps the same x-axis,
+    tree-depth y-axis, colorbar, tree overlay, and tip histogram as the standard
+    landscape plots.
+    """
+    xcenters = 0.5 * (xedges[:-1] + xedges[1:])
+    ycenters = 0.5 * (yedges[:-1] + yedges[1:])
+    relief = _scaled_relief_from_rate(rate_grid)
+
+    # Subtle grey background gives the rate field a terrain-like texture, but
+    # the actual quantitative values remain encoded by the color heatmap.
+    ax.imshow(
+        relief,
+        extent=(float(xedges[0]), float(xedges[-1]), float(yedges[-1]), float(yedges[0])),
+        cmap="Greys",
+        alpha=WADDINGTON_SHADE_ALPHA,
+        aspect="auto",
+        interpolation="bilinear",
+        zorder=0,
+    )
+
+    im = ax.pcolormesh(
+        xedges,
+        yedges,
+        np.ma.masked_invalid(rate_grid),
+        cmap=cmap,
+        norm=norm,
+        shading="auto",
+        alpha=WADDINGTON_ALPHA_SURF,
+        rasterized=True,
+        zorder=1,
+    )
+
+    finite_relief = relief[np.isfinite(relief)]
+    if len(finite_relief) > 0 and np.nanmax(finite_relief) > 0:
+        for idx in range(0, len(ycenters), WADDINGTON_LINE_EVERY):
+            y = ycenters[idx]
+            z = relief[idx, :]
+
+            # Since the y-axis is inverted later, adding to y makes the line
+            # bend downward on the page. Fast-rate regions therefore appear as
+            # valleys/channels rather than upward hills.
+            y_offsets = WADDINGTON_VALLEY_STRENGTH * z
+            ax.plot(
+                xcenters,
+                y + y_offsets,
+                color=WADDINGTON_LINE_COLOR,
+                lw=WADDINGTON_LINE_LW,
+                alpha=WADDINGTON_LINE_ALPHA,
+                zorder=2,
+            )
+
+    return im
+
+
+def _waddington_ledge_height(yedges):
+    if not WADDINGTON_DENSITY_LEDGE:
+        return 0.0
+    y_range = float(yedges[-1]) - float(yedges[0])
+    return WADDINGTON_DENSITY_LEDGE_HEIGHT * y_range
+
+
+def _draw_waddington_density_ledge(ax, component_col, xedges, yedges):
+    if not WADDINGTON_DENSITY_LEDGE:
+        return
+
+    tips = df[df["is_tip"] == 1]
+    vals = tips[component_col].to_numpy(float)
+    vals = vals[np.isfinite(vals)]
+
+    if len(vals) == 0:
+        return
+
+    xmin = float(xedges[0])
+    xmax = float(xedges[-1])
+    y_front = float(yedges[-1])
+    ledge_h = _waddington_ledge_height(yedges)
+    if ledge_h <= 0:
+        return
+
+    counts, bin_edges = np.histogram(
+        vals,
+        bins=WADDINGTON_DENSITY_LEDGE_BINS,
+        range=(xmin, xmax),
+    )
+    density = counts.astype(float)
+    density = gaussian_filter(density, sigma=WADDINGTON_DENSITY_LEDGE_SMOOTH_SIGMA)
+
+    if np.nanmax(density) > 0:
+        density = density / np.nanmax(density)
+    else:
+        density[:] = 0.0
+
+    xcenters = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    xcurve = np.r_[xmin, xcenters, xmax]
+    density_curve = np.r_[0.0, density, 0.0]
+
+    # The y-axis is inverted. Larger y-values appear lower on the page, so
+    # high terminal density becomes a deeper downward valley/cut in the ledge.
+    y_density = y_front + ledge_h * density_curve
+
+    ax.fill_between(
+        xcurve,
+        y_front,
+        y_density,
+        color=WADDINGTON_DENSITY_LEDGE_FACE_COLOR,
+        alpha=WADDINGTON_DENSITY_LEDGE_ALPHA,
+        linewidth=0,
+        zorder=18,
+        clip_on=True,
+    )
+
+    ax.plot(
+        [xmin, xmax],
+        [y_front, y_front],
+        color=WADDINGTON_DENSITY_LEDGE_EDGE_COLOR,
+        lw=0.75,
+        alpha=0.90,
+        zorder=20,
+        clip_on=True,
+    )
+
+    ax.plot(
+        xcurve,
+        y_density,
+        color=WADDINGTON_DENSITY_LEDGE_EDGE_COLOR,
+        lw=0.75,
+        alpha=0.90,
+        zorder=20,
+        clip_on=True,
+    )
+
+    for x, d in zip(xcenters, density):
+        y_bottom = y_front + ledge_h * d
+        ax.plot(
+            [x, x],
+            [y_front, y_bottom],
+            color=WADDINGTON_DENSITY_LEDGE_LINE_COLOR,
+            lw=WADDINGTON_DENSITY_LEDGE_LW,
+            alpha=WADDINGTON_DENSITY_LEDGE_LINE_ALPHA,
+            zorder=19,
+            clip_on=True,
+        )
+
+
+def _apply_waddington_y_limits(ax, yedges):
+    y_min = float(yedges[0])
+    y_front = float(yedges[-1])
+    ledge_h = _waddington_ledge_height(yedges)
+
+    # Extend only the Waddington-style plots downward so the density ledge is
+    # part of the main axis, while keeping tick labels restricted to tree depth.
+    ax.set_ylim(y_front + ledge_h, y_min)
+
+    ticks = [t for t in ax.get_yticks() if y_min <= t <= y_front]
+    ax.set_yticks(ticks)
+
 
 def _draw_tip_distribution(ax, component_col, xedges):
     if not SHOW_TIP_DISTRIBUTION_ON_LANDSCAPES:
@@ -626,35 +832,33 @@ def _component_rate_grid(component_col, time_col):
 
 
 def _draw_component_tree_trajectories(ax, component_col, time_col):
-    if not SHOW_TREE_LINES_ON_LANDSCAPES:
-        return
+    if SHOW_TREE_LINES_ON_LANDSCAPES:
+        parent_component_col = f"parent_{component_col}"
 
-    parent_component_col = f"parent_{component_col}"
+        for _, e in edges.iterrows():
+            ax.plot(
+                [e[parent_component_col], e[component_col]],
+                [e[f"parent_{time_col}"], e[time_col]],
+                color=LANDSCAPE_TRAJ_COLOR,
+                lw=LANDSCAPE_TRAJ_LW,
+                alpha=0.45,
+                solid_capstyle="round",
+                zorder=3,
+            )
 
-    for _, e in edges.iterrows():
-        ax.plot(
-            [e[parent_component_col], e[component_col]],
-            [e[f"parent_{time_col}"], e[time_col]],
-            color=LANDSCAPE_TRAJ_COLOR,
-            lw=LANDSCAPE_TRAJ_LW,
-            alpha=0.45,
-            solid_capstyle="round",
-            zorder=3,
+        internal = df[df["is_tip"] == 0]
+        tips = df[df["is_tip"] == 1]
+
+        ax.scatter(
+            internal[component_col], internal[time_col],
+            color="0.20", s=FACTOR_NODE_SIZE, alpha=0.18,
+            linewidths=0, rasterized=True, zorder=4,
         )
-
-    internal = df[df["is_tip"] == 0]
-    tips = df[df["is_tip"] == 1]
-
-    ax.scatter(
-        internal[component_col], internal[time_col],
-        color="0.20", s=FACTOR_NODE_SIZE, alpha=0.18,
-        linewidths=0, rasterized=True, zorder=4,
-    )
-    ax.scatter(
-        tips[component_col], tips[time_col],
-        color="0.05", s=FACTOR_TIP_SIZE, alpha=0.30,
-        linewidths=0, rasterized=True, zorder=5,
-    )
+        ax.scatter(
+            tips[component_col], tips[time_col],
+            color="0.05", s=FACTOR_TIP_SIZE, alpha=0.30,
+            linewidths=0, rasterized=True, zorder=5,
+        )
     ax.scatter(
         root_row[component_col], root_row[time_col],
         s=ROOT_SIZE, color=ROOT_COLOR,
@@ -818,35 +1022,33 @@ def _factor_rate_grid(factor_col, time_col):
 
 
 def _draw_factor_tree_trajectories(ax, factor_col, time_col):
-    if not SHOW_TREE_LINES_ON_LANDSCAPES:
-        return
+    if SHOW_TREE_LINES_ON_LANDSCAPES:
+        parent_factor_col = f"parent_{factor_col}"
 
-    parent_factor_col = f"parent_{factor_col}"
+        for _, e in edges.iterrows():
+            ax.plot(
+                [e[parent_factor_col], e[factor_col]],
+                [e[f"parent_{time_col}"], e[time_col]],
+                color=LANDSCAPE_TRAJ_COLOR,
+                lw=LANDSCAPE_TRAJ_LW,
+                alpha=0.45,
+                solid_capstyle="round",
+                zorder=3,
+            )
 
-    for _, e in edges.iterrows():
-        ax.plot(
-            [e[parent_factor_col], e[factor_col]],
-            [e[f"parent_{time_col}"], e[time_col]],
-            color=LANDSCAPE_TRAJ_COLOR,
-            lw=LANDSCAPE_TRAJ_LW,
-            alpha=0.45,
-            solid_capstyle="round",
-            zorder=3,
+        internal = df[df["is_tip"] == 0]
+        tips = df[df["is_tip"] == 1]
+
+        ax.scatter(
+            internal[factor_col], internal[time_col],
+            color="0.20", s=FACTOR_NODE_SIZE, alpha=0.18,
+            linewidths=0, rasterized=True, zorder=4,
         )
-
-    internal = df[df["is_tip"] == 0]
-    tips = df[df["is_tip"] == 1]
-
-    ax.scatter(
-        internal[factor_col], internal[time_col],
-        color="0.20", s=FACTOR_NODE_SIZE, alpha=0.18,
-        linewidths=0, rasterized=True, zorder=4,
-    )
-    ax.scatter(
-        tips[factor_col], tips[time_col],
-        color="0.05", s=FACTOR_TIP_SIZE, alpha=0.30,
-        linewidths=0, rasterized=True, zorder=5,
-    )
+        ax.scatter(
+            tips[factor_col], tips[time_col],
+            color="0.05", s=FACTOR_TIP_SIZE, alpha=0.30,
+            linewidths=0, rasterized=True, zorder=5,
+        )
     ax.scatter(
         root_row[factor_col], root_row[time_col],
         s=ROOT_SIZE, color=ROOT_COLOR,
@@ -1077,6 +1279,178 @@ def plot_circular_factor_trees():
     fig.savefig(f"{args.out_prefix}.factor_trees.pdf", bbox_inches="tight")
     plt.close(fig)
 
+def plot_embedding_landscapes_waddington():
+    if not MAKE_WADDINGTON_STYLE_LANDSCAPES:
+        return
+
+    time_col = "tree_depth"
+    _ensure_parent_time_col(time_col)
+    _add_edge_rate_columns()
+
+    component_configs = [
+        ("Latent distance", "latent_distance_from_root", "Latent distance"),
+        ("PC1", "pc1", "PC1"),
+        ("PC2", "pc2", "PC2"),
+        ("UMAP1", "umap1", "UMAP1"),
+        ("UMAP2", "umap2", "UMAP2"),
+    ]
+
+    fig, axes = plt.subplots(
+        1, 5,
+        figsize=(3.35 * 5, 3.35),
+        squeeze=False,
+    )
+
+    fig.subplots_adjust(
+        left=0.045,
+        right=0.985,
+        bottom=0.30,
+        top=0.86,
+        wspace=0.50,
+    )
+
+    for ax, (title, component_col, xlabel) in zip(axes.ravel(), component_configs):
+        xedges, yedges, rate_grid = _component_rate_grid(component_col, time_col)
+
+        plot_rate_grid = np.abs(rate_grid) if USE_ABSOLUTE_RATES_WADDINGTON else rate_grid
+
+        finite_vals = plot_rate_grid[np.isfinite(plot_rate_grid)]
+        if len(finite_vals) == 0:
+            vmax = 1.0
+        else:
+            if USE_ABSOLUTE_RATES_WADDINGTON:
+                vmax = float(np.nanpercentile(finite_vals, 98))
+            else:
+                vmax = float(np.nanpercentile(np.abs(finite_vals), 98))
+            if not np.isfinite(vmax) or vmax <= 0:
+                vmax = 1.0
+
+        if USE_ABSOLUTE_RATES_WADDINGTON:
+            norm = mpl.colors.Normalize(vmin=0.0, vmax=vmax)
+        else:
+            norm = mpl.colors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+        cmap = WADDINGTON_CMAP
+
+        im = _draw_waddington_relief_landscape(ax, xedges, yedges, plot_rate_grid, norm, cmap)
+
+        cbar = fig.colorbar(
+            im,
+            ax=ax,
+            fraction=0.045,
+            pad=0.030,
+        )
+        cbar.set_label(
+            f"abs(Δ {xlabel} / branch length)"
+            if USE_ABSOLUTE_RATES_WADDINGTON
+            else f"Δ {xlabel} / branch length",
+            fontsize=7,
+        )
+        cbar.ax.tick_params(labelsize=6)
+        cbar.outline.set_visible(False)
+
+        _draw_component_tree_trajectories(ax, component_col, time_col)
+        ax.set_xlim(float(xedges[0]), float(xedges[-1]))
+        _apply_waddington_y_limits(ax, yedges)
+        _draw_waddington_density_ledge(ax, component_col, xedges, yedges)
+        ax.set_title("", fontsize=10, pad=8)
+        ax.set_xlabel(xlabel, fontsize=9, labelpad=5)
+        ax.set_ylabel(format_label(time_col), fontsize=9, labelpad=6)
+        ax.tick_params(labelsize=8)
+        sns.despine(ax=ax)
+
+    fig.savefig(f"{args.out_prefix}.embedding_transition_landscapes.waddington.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_factor_landscapes_waddington():
+    if not MAKE_WADDINGTON_STYLE_LANDSCAPES:
+        return
+
+    time_col = "tree_depth"
+    _ensure_parent_time_col(time_col)
+    _add_edge_rate_columns()
+
+    n_factors = len(factor_cols)
+    n_cols = min(FACTOR_LANDSCAPE_COLS, n_factors)
+    n_rows = math.ceil(n_factors / FACTOR_LANDSCAPE_COLS)
+
+    fig, axes = plt.subplots(
+        n_rows, n_cols,
+        figsize=(3.55 * n_cols, 3.25 * n_rows),
+        squeeze=False,
+    )
+
+    fig.subplots_adjust(
+        left=0.05,
+        right=0.98,
+        bottom=0.13,
+        top=0.93,
+        wspace=0.52,
+        hspace=0.78,
+    )
+    axes = axes.ravel()
+
+    rate_grids = {
+        factor_col: _factor_rate_grid(factor_col, time_col)
+        for factor_col in factor_cols
+    }
+
+    for ax_idx, factor_col in enumerate(factor_cols):
+        ax = axes[ax_idx]
+        xedges, yedges, rate_grid = rate_grids[factor_col]
+
+        plot_rate_grid = np.abs(rate_grid) if USE_ABSOLUTE_RATES_WADDINGTON else rate_grid
+
+        finite_vals = plot_rate_grid[np.isfinite(plot_rate_grid)]
+        if len(finite_vals) == 0:
+            vmax = 1.0
+        else:
+            if USE_ABSOLUTE_RATES_WADDINGTON:
+                vmax = float(np.nanpercentile(finite_vals, 98))
+            else:
+                vmax = float(np.nanpercentile(np.abs(finite_vals), 98))
+            if not np.isfinite(vmax) or vmax <= 0:
+                vmax = 1.0
+
+        if USE_ABSOLUTE_RATES_WADDINGTON:
+            norm = mpl.colors.Normalize(vmin=0.0, vmax=vmax)
+        else:
+            norm = mpl.colors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+        cmap = WADDINGTON_CMAP
+
+        im = _draw_waddington_relief_landscape(ax, xedges, yedges, plot_rate_grid, norm, cmap)
+
+        cbar = fig.colorbar(
+            im,
+            ax=ax,
+            fraction=0.045,
+            pad=0.030,
+        )
+        cbar.set_label(
+            f"abs(Δ {format_label(factor_col)} / branch length)"
+            if USE_ABSOLUTE_RATES_WADDINGTON
+            else f"Δ {format_label(factor_col)} / branch length",
+            fontsize=8,
+        )
+        cbar.ax.tick_params(labelsize=6)
+        cbar.outline.set_visible(False)
+
+        _draw_factor_tree_trajectories(ax, factor_col, time_col)
+        ax.set_xlim(float(xedges[0]), float(xedges[-1]))
+        _apply_waddington_y_limits(ax, yedges)
+        _draw_waddington_density_ledge(ax, factor_col, xedges, yedges)
+        ax.set_title("", fontsize=10, pad=8)
+        ax.set_xlabel(format_label(factor_col), fontsize=9, labelpad=5)
+        ax.set_ylabel(format_label(time_col), fontsize=9, labelpad=6)
+        ax.tick_params(labelsize=8)
+        sns.despine(ax=ax)
+
+    for ax in axes[n_factors:]:
+        ax.axis("off")
+
+    fig.savefig(f"{args.out_prefix}.factor_transition_landscapes.waddington.pdf", bbox_inches="tight")
+    plt.close(fig)
+
 
 for prefix, xcol, ycol in [
     ("pca", "pc1", "pc2"),
@@ -1090,3 +1464,5 @@ for prefix, xcol, ycol in [
 plot_circular_factor_trees()
 plot_embedding_landscapes()
 plot_factor_landscapes()
+plot_embedding_landscapes_waddington()
+plot_factor_landscapes_waddington()
