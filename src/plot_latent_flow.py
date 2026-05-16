@@ -13,7 +13,6 @@ from scipy.ndimage import gaussian_filter
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import umap
 
 def truncate_colormap(cmap_name, minval=0.10, maxval=0.90, n=256):
     cmap = mpl.colormaps[cmap_name]
@@ -28,6 +27,10 @@ def truncate_colormap(cmap_name, minval=0.10, maxval=0.90, n=256):
 UMAP_N_NEIGHBORS = 15
 UMAP_MIN_DIST = 0.3
 UMAP_RANDOM_STATE = 1
+
+# Set to False to skip UMAP calculation and all separate UMAP output plots.
+# The 5-panel embedding landscape figures keep the UMAP slots as empty axes.
+INCLUDE_UMAP_PLOTS = False
 
 CMAP = sns.color_palette("YlOrBr", as_cmap=True)
 TREE_CMAP = mpl.colormaps["RdBu_r"]
@@ -186,18 +189,24 @@ total_dist_df.to_csv(
     index=False,
 )
 
-reducer = umap.UMAP(
-    n_neighbors=UMAP_N_NEIGHBORS,
-    min_dist=UMAP_MIN_DIST,
-    random_state=UMAP_RANDOM_STATE,
-)
+if INCLUDE_UMAP_PLOTS:
+    import umap
 
-tip_mask = df["is_tip"] == 1
-reducer.fit(df.loc[tip_mask, factor_cols].to_numpy(float))
-embedding = reducer.transform(df[factor_cols].to_numpy(float))
+    reducer = umap.UMAP(
+        n_neighbors=UMAP_N_NEIGHBORS,
+        min_dist=UMAP_MIN_DIST,
+        random_state=UMAP_RANDOM_STATE,
+    )
 
-df["umap1"] = embedding[:, 0]
-df["umap2"] = embedding[:, 1]
+    tip_mask = df["is_tip"] == 1
+    reducer.fit(df.loc[tip_mask, factor_cols].to_numpy(float))
+    embedding = reducer.transform(df[factor_cols].to_numpy(float))
+
+    df["umap1"] = embedding[:, 0]
+    df["umap2"] = embedding[:, 1]
+else:
+    df["umap1"] = np.nan
+    df["umap2"] = np.nan
 
 root_row = df.loc[df["parent_id"] < 0].iloc[0]
 
@@ -1005,6 +1014,10 @@ def _draw_tip_distribution(ax, component_col, xedges):
     hist_ax.spines["bottom"].set_linewidth(0.6)
 
 
+def _is_umap_component(component_col):
+    return component_col.startswith("umap")
+
+
 def _component_rate_grid(component_col, time_col):
     _add_edge_rate_columns()
 
@@ -1123,6 +1136,10 @@ def plot_embedding_landscapes():
     )
 
     for ax, (title, component_col, xlabel) in zip(axes.ravel(), component_configs):
+        if _is_umap_component(component_col) and not INCLUDE_UMAP_PLOTS:
+            ax.axis("off")
+            continue
+
         xedges, yedges, rate_grid = _component_rate_grid(component_col, time_col)
 
         finite_vals = rate_grid[np.isfinite(rate_grid)]
@@ -1512,6 +1529,10 @@ def plot_embedding_landscapes_waddington():
     )
 
     for ax, (title, component_col, xlabel) in zip(axes.ravel(), component_configs):
+        if _is_umap_component(component_col) and not INCLUDE_UMAP_PLOTS:
+            ax.axis("off")
+            continue
+
         xedges, yedges, density_grid = _trajectory_density_grid(component_col, time_col)
 
         finite_vals = density_grid[np.isfinite(density_grid)]
@@ -1644,10 +1665,13 @@ def plot_factor_landscapes_waddington():
     plt.close(fig)
 
 
-for prefix, xcol, ycol in [
+projection_configs = [
     ("pca", "pc1", "pc2"),
-    ("umap", "umap1", "umap2"),
-]:
+]
+if INCLUDE_UMAP_PLOTS:
+    projection_configs.append(("umap", "umap1", "umap2"))
+
+for prefix, xcol, ycol in projection_configs:
     plot_colored_projection(xcol, ycol, prefix, "tree_depth", "tree_depth")
     plot_colored_projection(xcol, ycol, prefix, "latent_distance_from_root", "latent_distance_from_root")
     plot_flow_projection(xcol, ycol, prefix)
