@@ -152,3 +152,4 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 			/mnt/cwd/$*_gex.umap.tsv \
 			/mnt/cwd/$*.fit.latent_flow.total_euclidean_distance.tsv \
 			/mnt/cwd/$*.fit.latent_flow
+
