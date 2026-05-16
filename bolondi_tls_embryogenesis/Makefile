@@ -138,7 +138,7 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 			/mnt/cwd/$*.fit.L.factor_heatmap.pdf
 
 # Plot the latent flow results
-%.fit.latent_flow.factor_trees.circular.pdf %.fit.latent_flow.total_euclidean_distance.tsv: %.fit.latent_flow.tsv
+%.fit.latent_flow.factor_trees.pdf %.fit.latent_flow.total_euclidean_distance.tsv: %.fit.latent_flow.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_latent_flow.py \
 			/mnt/cwd/$*.fit.latent_flow.tsv \
