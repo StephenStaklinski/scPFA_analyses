@@ -68,12 +68,16 @@ metric_labels = {
     "gene_cov_correlation": "Gene covariance correlation",
     "F_col_mean_abs_corr": "F column mean abs corr",
     "L_row_mean_abs_corr": "L row mean abs corr",
+    "F_col_mean_corr": "F column mean corr",
+    "L_row_mean_corr": "L row mean corr",
 }
 
-fig, axes = plt.subplots(2, 3, figsize=(4.5 * 3, 3.6 * 2))
+ncols = 4 if len(metric_cols) > 6 else 3
+nrows = (len(metric_cols) + ncols - 1) // ncols
+fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 3.6 * nrows), squeeze=False)
 
 for i, metric in enumerate(metric_cols):
-    ax = axes[i // 3, i % 3]
+    ax = axes[i // ncols, i % ncols]
 
     plot_df = df[["NTAXA", "NGENES", metric]].dropna()
 
@@ -92,7 +96,9 @@ for i, metric in enumerate(metric_cols):
     )
     
     ymin, ymax = ax.get_ylim()
-    if ymax < 1:
+    if ymin < 0 and ymax <= 1:
+        ax.set_ylim(-1, 1)
+    elif ymax < 1:
         ax.set_ylim(0, 1)
 
     ax.set_title("")
@@ -112,6 +118,9 @@ for i, metric in enumerate(metric_cols):
     # Keep only one shared legend
     if ax.legend_ is not None:
         ax.legend_.remove()
+
+for i in range(len(metric_cols), nrows * ncols):
+    axes[i // ncols, i % ncols].axis("off")
 
 handles, labels = axes[0, 0].get_legend_handles_labels()
 fig.legend(

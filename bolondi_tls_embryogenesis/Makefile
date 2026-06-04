@@ -32,8 +32,8 @@ LOGPLOTS := tls1.fit.log.pdf tls2.fit.log.pdf
 PANELPLOTS := tls1.fit.panel.png tls2.fit.panel.png
 GEXLINEAGEGSEA := tls1.fit.L.gsea.tsv tls2.fit.L.gsea.tsv
 FACTORHEATMAPS := tls1.fit.L.factor_heatmap.pdf tls2.fit.L.factor_heatmap.pdf
-FLOWTREES := tls1.fit.latent_flow.factor_trees.circular.pdf tls2.fit.latent_flow.factor_trees.circular.pdf
-EUCLIDEANPSEUDOTIME := tls1.fit.euclidean_factor_pseudotime.pdf tls2.fit.euclidean_factor_pseudotime.pdf
+FLOWTREES := tls1.fit.latent_flow.factor_trees.pdf tls2.fit.latent_flow.factor_trees.pdf
+EUCLIDEANPSEUDOTIME := tls1.fit.latent_flow.euclidean_factor_pseudotime.pdf tls2.fit.latent_flow.euclidean_factor_pseudotime.pdf
 
 all: prep_data run_vine
 
@@ -103,9 +103,11 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	--tree-total-time 1.0 \
 	--outprefix $*.fit \
 	--filter-test moran \
-	--dim 10 \
+	--dim 6 \
+	--final-absorbing-factor \
+	--final-absorbing-L-l2-strength 1e-4 \
+	--L-l1-strength 5.0 \
 	--varimax \
-	--L-l1-strength 1.0 \
 	--max-iter 10000 \
 	--nthreads 1 \
 	--verbose-log \
@@ -145,7 +147,7 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 			/mnt/cwd/$*.fit.latent_flow
 
 # Plot euclidean latent-factor pseudotime on gex-only PCA/UMAP embeddings
-%.fit.euclidean_factor_pseudotime.pdf: %.fit.latent_flow.total_euclidean_distance.tsv %_gex.pca.tsv %_gex.umap.tsv
+%.fit.latent_flow.euclidean_factor_pseudotime.pdf: %.fit.latent_flow.total_euclidean_distance.tsv %_gex.pca.tsv %_gex.umap.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_factor_euclidean_distance_pseudotime.py \
 			/mnt/cwd/$*_gex.pca.tsv \

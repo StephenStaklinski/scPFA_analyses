@@ -69,7 +69,6 @@ sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.t
 		--expr sim.$*.sim.X.tsv \
 		--outprefix sim.$*.fit \
 		--dim ${K} \
-		--varimax \
 		--no-filter \
 		--verbose-log \
 		--no-preprocess > sim.$*.fit.term

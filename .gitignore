@@ -22,6 +22,9 @@ archive*
 *.pdf
 quinn.*
 quinn_*.*
+summaries
+tls1
+tls2
 
 # Ignore built containers
 *.sif
