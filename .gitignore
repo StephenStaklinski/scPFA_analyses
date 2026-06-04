@@ -25,8 +25,14 @@ quinn_*.*
 summaries
 tls1
 tls2
+runs
+*.tsv
 
 # Ignore built containers
 *.sif
+
+# Ignore other
+__pycache__
+*.pyc
 
 

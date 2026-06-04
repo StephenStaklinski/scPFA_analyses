@@ -171,7 +171,7 @@ def main():
                 clone_df[x_col],
                 clone_df["total_log_likelihood"],
                 s=50,
-                color="#56B4E9",
+                color="#F0E442",
                 edgecolor="white",
                 linewidth=0.5,
                 alpha=0.9,
@@ -184,7 +184,7 @@ def main():
                     [default_row["total_log_likelihood"]],
                     s=120,
                     marker="o",
-                    color="#D55E00",
+                    color="#E69F00",
                     edgecolor="white",
                     linewidth=0.7,
                     zorder=5,
@@ -193,8 +193,7 @@ def main():
             if x_col == "mean_offdiag_L_correlation":
                 ax.axvline(0, color="0.2", linewidth=0.8, linestyle="--", alpha=0.7)
 
-            title_suffix = "absolute overlap" if col_idx == 0 else "signed overlap"
-            ax.set_title(f"{clone}: {title_suffix}")
+            ax.set_title(clone)
             ax.set_xlabel(xlabel)
             ax.set_ylabel("Brownian + observation log-likelihood")
             ax.tick_params(
@@ -213,20 +212,20 @@ def main():
             [0],
             marker="o",
             color="none",
-            markerfacecolor="#56B4E9",
+            markerfacecolor="#F0E442",
             markeredgecolor="white",
             markersize=7,
-            label="Various penalties applied",
+            label="Altered model",
         ),
         Line2D(
             [0],
             [0],
             marker="o",
             color="none",
-            markerfacecolor="#D55E00",
+            markerfacecolor="#E69F00",
             markeredgecolor="white",
             markersize=10,
-            label="Default no-penalty model",
+            label="Default model",
         ),
     ]
     fig.legend(

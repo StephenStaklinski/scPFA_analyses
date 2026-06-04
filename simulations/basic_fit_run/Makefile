@@ -36,8 +36,8 @@ ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTPREFIX}.gex.tsv
 
 # Compare the final objective value
 diff-objective.txt: ${OUTPREFIX}.log ${PREV_OUTPREFIX}.log 
-	prev_obj=$$(tail -n 2 ${PREV_OUTPREFIX}.log | head -n 1 | cut -f2); \
-	obj=$$(tail -n 2 ${OUTPREFIX}.log | head -n 1 | cut -f2); \
+	prev_obj=$$(tail -n 1 ${PREV_OUTPREFIX}.log | cut -f4); \
+	obj=$$(tail -n 1 ${OUTPREFIX}.log | cut -f4); \
 	echo -e "current_objective\tprevious_objective\trelative_diff" > $@; \
 	echo -e "$$obj\t$$prev_obj\t$$(echo "scale=6; ($$obj - $$prev_obj) / $$prev_obj" | bc)" >> $@
 
