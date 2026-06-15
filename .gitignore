@@ -27,12 +27,13 @@ tls1
 tls2
 runs
 *.tsv
+overlap_summary.tsv
 
 # Ignore built containers
 *.sif
 
 # Ignore other
-__pycache__
+__pycache__/
 *.pyc
 
 
