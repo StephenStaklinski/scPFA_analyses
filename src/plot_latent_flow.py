@@ -2,11 +2,13 @@
 
 import argparse
 import math
+import sys
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
@@ -127,10 +129,22 @@ WADDINGTON_DENSITY_LEDGE_LW = 0.35
 WADDINGTON_DENSITY_LEDGE_N_HORIZONTAL_LINES = 6
 WADDINGTON_DENSITY_LEDGE_VALLEY_STRENGTH = 0.70
 
+WADDINGTON_LABEL_HIST_BINS = 65
+WADDINGTON_LABEL_HIST_HEIGHT = 0.84
+WADDINGTON_LABEL_HIST_Y_OFFSET = -1.18
+WADDINGTON_LABEL_HIST_ALPHA = 0.78
+
 parser = argparse.ArgumentParser()
 parser.add_argument("latent_tree_nodes_tsv")
 parser.add_argument("out_prefix")
 parser.add_argument("--min_delta_quantile", type=float, default=0.0)
+parser.add_argument(
+    "--barcode-discrete-label-tsv",
+    help=(
+        "Optional TSV with barcode and tissue columns. Adds one aligned terminal-cell "
+        "histogram per tissue below each Waddington-style panel."
+    ),
+)
 args = parser.parse_args()
 
 
@@ -166,6 +180,43 @@ if len(factor_cols) == 0:
 df["node_id"] = df["node_id"].astype(int)
 df["parent_id"] = df["parent_id"].astype(int)
 df["is_tip"] = df["is_tip"].astype(int)
+
+barcode_tissue = None
+if args.barcode_discrete_label_tsv:
+    barcode_tissue = pd.read_csv(args.barcode_discrete_label_tsv, sep="\t", dtype=str)
+    required_columns = {"barcode", "tissue"}
+    missing_columns = required_columns - set(barcode_tissue.columns)
+    if missing_columns:
+        raise ValueError(
+            "Barcode tissue TSV is missing required column(s): "
+            + ", ".join(sorted(missing_columns))
+        )
+
+    barcode_tissue = barcode_tissue[["barcode", "tissue"]].dropna().copy()
+    conflicting = (
+        barcode_tissue.groupby("barcode", sort=False)["tissue"].nunique() > 1
+    )
+    if conflicting.any():
+        examples = ", ".join(conflicting[conflicting].index[:5])
+        raise ValueError(f"Barcodes have conflicting tissue labels: {examples}")
+
+    barcode_tissue = barcode_tissue.drop_duplicates("barcode")
+    tissue_lookup = barcode_tissue.set_index("barcode")["tissue"]
+    tip_names = df.loc[df["is_tip"] == 1, "node_name"].astype(str)
+    matched_tissues = tip_names.map(tissue_lookup)
+
+    if matched_tissues.notna().sum() == 0:
+        raise ValueError("No terminal node names matched the barcode tissue TSV.")
+
+    unmatched_count = int(matched_tissues.isna().sum())
+    if unmatched_count:
+        print(
+            f"Warning: {unmatched_count} terminal cells have no tissue label and "
+            "will be omitted from tissue histograms.",
+            file=sys.stderr,
+        )
+
+    df["tissue"] = df["node_name"].astype(str).map(tissue_lookup)
 
 root = df.loc[df["parent_id"] < 0]
 if len(root) != 1:
@@ -868,6 +919,107 @@ def _apply_waddington_y_limits(ax, yedges):
 
     ticks = [t for t in ax.get_yticks() if y_min <= t <= y_front]
     ax.set_yticks(ticks)
+
+
+def _draw_waddington_label_histograms(ax, component_col, xedges):
+    if barcode_tissue is None:
+        return
+
+    tips = df[(df["is_tip"] == 1) & df["tissue"].notna()]
+    if len(tips) == 0:
+        return
+
+    labels = sorted(tips["tissue"].unique())
+    colors = sns.color_palette("tab10", n_colors=len(labels))
+    bin_edges = np.linspace(
+        float(xedges[0]),
+        float(xedges[-1]),
+        WADDINGTON_LABEL_HIST_BINS + 1,
+    )
+
+    row_height = WADDINGTON_LABEL_HIST_HEIGHT / len(labels)
+    legend_handles = []
+    x_min = float(xedges[0])
+    x_max = float(xedges[-1])
+    x_ticks = [tick for tick in ax.get_xticks() if x_min <= tick <= x_max]
+    x_labels = ax.xaxis.get_major_formatter().format_ticks(x_ticks)
+
+    for row, (label, color) in enumerate(zip(labels, colors)):
+        vals = tips.loc[tips["tissue"] == label, component_col].to_numpy(float)
+        vals = vals[np.isfinite(vals)]
+        counts, _ = np.histogram(vals, bins=bin_edges)
+        max_count = max(int(counts.max()), 1)
+
+        hist_ax = ax.inset_axes(
+            [
+                0.0,
+                WADDINGTON_LABEL_HIST_Y_OFFSET
+                + (len(labels) - row - 1) * row_height,
+                1.0,
+                row_height * 0.66,
+            ],
+            transform=ax.transAxes,
+        )
+        hist_ax.stairs(
+            counts,
+            bin_edges,
+            baseline=0,
+            fill=True,
+            color=color,
+            alpha=WADDINGTON_LABEL_HIST_ALPHA,
+            linewidth=0.35,
+        )
+        hist_ax.set_xlim(x_min, x_max)
+        hist_ax.set_ylim(0, max_count)
+        hist_ax.set_yticks([0, max_count])
+        hist_ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
+        hist_ax.tick_params(
+            axis="y",
+            labelsize=4.5,
+            left=True,
+            length=3.0,
+            width=0.8,
+            direction="out",
+            pad=1,
+        )
+        if row == len(labels) - 1:
+            hist_ax.set_xticks(x_ticks, labels=x_labels)
+            hist_ax.tick_params(
+                axis="x",
+                labelsize=6,
+                bottom=True,
+                length=3.0,
+                width=0.8,
+                direction="out",
+                pad=2,
+            )
+        else:
+            hist_ax.tick_params(axis="x", bottom=False, labelbottom=False)
+        hist_ax.set_facecolor("none")
+        hist_ax.spines["top"].set_visible(False)
+        hist_ax.spines["right"].set_visible(False)
+        hist_ax.spines["bottom"].set_color("0.55")
+        hist_ax.spines["bottom"].set_linewidth(0.8)
+        hist_ax.spines["left"].set_color("0.65")
+        hist_ax.spines["left"].set_linewidth(0.8)
+        legend_handles.append(Patch(facecolor=color, alpha=WADDINGTON_LABEL_HIST_ALPHA, label=label))
+
+    ax.legend(
+        handles=legend_handles,
+        loc="center left",
+        bbox_to_anchor=(
+            1.04,
+            WADDINGTON_LABEL_HIST_Y_OFFSET
+            + 0.5 * WADDINGTON_LABEL_HIST_HEIGHT,
+        ),
+        ncol=1,
+        frameon=False,
+        fontsize=6,
+        handlelength=1.0,
+        handleheight=0.7,
+        labelspacing=0.45,
+        borderaxespad=0,
+    )
 
 
 
@@ -1574,7 +1726,16 @@ def plot_embedding_landscapes_waddington():
             direction="out",
             left=True,
         )
+        ax.tick_params(
+            axis="x",
+            which="major",
+            bottom=True,
+            length=3.5,
+            width=0.8,
+            direction="out",
+        )
         sns.despine(ax=ax)
+        _draw_waddington_label_histograms(ax, component_col, xedges)
 
     fig.savefig(f"{args.out_prefix}.embedding_transition_landscapes.waddington.pdf", bbox_inches="tight")
     plt.close(fig)
@@ -1656,7 +1817,16 @@ def plot_factor_landscapes_waddington():
             direction="out",
             left=True,
         )
+        ax.tick_params(
+            axis="x",
+            which="major",
+            bottom=True,
+            length=3.5,
+            width=0.8,
+            direction="out",
+        )
         sns.despine(ax=ax)
+        _draw_waddington_label_histograms(ax, factor_col, xedges)
 
     for ax in axes[n_factors:]:
         ax.axis("off")

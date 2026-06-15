@@ -32,6 +32,7 @@ QUINNCPS := 2 3 4 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 
 
 
 CHARMATRICES := $(QUINNCPS:%=quinn_%_character_matrix.tsv)
+BARCODE_TISSUES := $(QUINNCPS:%=quinn_%_barcode_tissue.tsv)
 GEXMATS := $(QUINNCPS:%=quinn_%_gex.tsv)
 VINETREES := $(QUINNCPS:%=quinn_%.vine.nex)
 GEXLINEAGERESULTS := $(QUINNCPS:%=quinn_%.fit.summary.tsv)
@@ -47,7 +48,7 @@ EUCLIDEANPSEUDOTIME := $(QUINNCPS:%=quinn_%.fit.latent_flow.euclidean_factor_pse
 
 all: prep_data run_vine gexlineage plotting
 
-prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
+prep_data: $(CHARMATRICES) $(BARCODE_TISSUES) $(GEXMATS) $(ORIGEMBEDDINGS)
 palantir: $(PALANTIRTRAJECTORIES)
 monocle: $(MONOCLETRAJECTORIES)
 run_vine: $(VINETREES)
@@ -58,6 +59,10 @@ plotting: $(LOGPLOTS) $(PANELPLOTS) $(GEXLINEAGEGSEA) $(FACTORHEATMAPS) $(FLOWTR
 # Copy and reformat the provided character matrices
 quinn_%_character_matrix.tsv:
 	awk 'BEGIN{FS=OFS="\t"} { for(i=2;i<=NF;i++) if($$i=="-") $$i="-1"; print }' $(DATA_DIR_CHAR)/m5k_lg$*_character_matrix.alleleThresh.txt > $@
+
+# Extract the tissue prefix from cell names such as RW.AAAC... into clone-specific metadata.
+quinn_%_barcode_tissue.tsv: quinn_%_character_matrix.tsv
+	awk 'BEGIN{FS=OFS="\t"; print "barcode", "tissue"} FNR > 1 { tissue=$$1; sub(/\..*$$/, "", tissue); print $$1, tissue }' $< > $@
 
 # Subset the gene expression data to the cells present in the character matrix
 quinn_%_gex.tsv: quinn_%_character_matrix.tsv $(DATA_DIR_GEX)/GSM4905335_matrix.5k.mtx $(DATA_DIR_GEX)/GSM4905335_barcodes.5k.tsv $(DATA_DIR_GEX)/GSM4905335_genes.5k.tsv
@@ -143,11 +148,12 @@ quinn_%.fit.L.factor_heatmap.pdf: quinn_%.fit.L.tsv
 			/mnt/cwd/quinn_$*.fit.L.factor_heatmap.pdf
 
 # Plot the latent flow results
-quinn_%.fit.latent_flow.factor_trees.pdf quinn_%.fit.latent_flow.total_euclidean_distance.tsv: quinn_%.fit.latent_flow.tsv
+quinn_%.fit.latent_flow.factor_trees.pdf quinn_%.fit.latent_flow.total_euclidean_distance.tsv: quinn_%.fit.latent_flow.tsv quinn_%_barcode_tissue.tsv
 	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
 		python /mnt/src/plot_latent_flow.py \
 			/mnt/cwd/quinn_$*.fit.latent_flow.tsv \
-			/mnt/cwd/quinn_$*.fit.latent_flow
+			/mnt/cwd/quinn_$*.fit.latent_flow \
+			--barcode-discrete-label-tsv /mnt/cwd/quinn_$*_barcode_tissue.tsv
 
 # Plot euclidean latent-factor pseudotime on gex-only PCA/UMAP embeddings
 quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow.total_euclidean_distance.tsv quinn_%_gex.pca.tsv quinn_%_gex.umap.tsv
@@ -160,3 +166,6 @@ quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow
 
 clean-gexlineage:
 	rm -f *.fit.*
+
+clean-waddington-plots:
+	rm -f *.waddington.pdf
