@@ -27,7 +27,8 @@ DATA_DIR_GEX := ./data/GSE161363/GSM4905335_barcodes_genes_matrix_5k
 
 # Excluded in the original paper barcode quality control: 5 16 18 25 33 38 39 41 50 53 65 69 75 81 87 88 93
 # Ignore because they have <100 cells: 45 46 47 48 49 51 52 54 55 56 57 58 59 60 61 62 63 64 66 67 68 70 71 72 73 74 76 77 78 79 80 82 83 84 85 86 89 90 91 92 94 95 96 97 98 99 100
-QUINNCPS := 44 #1 2 3 4 6 7 8 9 10 # 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 31 32 34 35 36 37 40 42 43 44
+# Failed (maybe due to memory?): 1
+QUINNCPS := 2 3 4 6 7 8 9 10 11 12 13 14 15 17 19 20 21 22 23 24 26 27 28 29 30 31 32 34 35 36 37 40 42 43 44
 
 
 CHARMATRICES := $(QUINNCPS:%=quinn_%_character_matrix.tsv)
@@ -44,7 +45,6 @@ MONOCLETRAJECTORIES := $(QUINNCPS:%=quinn_%_gex.monocle.pseudotime.pdf)
 FLOWTREES := $(QUINNCPS:%=quinn_%.fit.latent_flow.factor_trees.pdf)
 EUCLIDEANPSEUDOTIME := $(QUINNCPS:%=quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf)
 
-
 all: prep_data run_vine gexlineage plotting
 
 prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
@@ -53,6 +53,7 @@ monocle: $(MONOCLETRAJECTORIES)
 run_vine: $(VINETREES)
 gexlineage: $(GEXLINEAGERESULTS)
 plotting: $(LOGPLOTS) $(PANELPLOTS) $(GEXLINEAGEGSEA) $(FACTORHEATMAPS) $(FLOWTREES) $(EUCLIDEANPSEUDOTIME)
+
 
 # Copy and reformat the provided character matrices
 quinn_%_character_matrix.tsv:
@@ -105,13 +106,12 @@ quinn_%.fit.summary.tsv quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv qu
 	--tree-total-time 1.0 \
 	--outprefix quinn_$*.fit \
 	--filter-test $$FILTERTEST \
-	--dim 6 \
-	--final-absorbing-factor \
-	--final-absorbing-L-l2-strength 1e-4 \
-	--L-l1-strength 5.0 \
-	--varimax \
-	--F-orthogonality-strength 1.0 \
-	--max-iter 10000 \
+	--dim 5 \
+	--L-l1-strength 10 \
+	--L-loading-overlap-strength 10 \
+	--remove-ribo-mito-genes \
+	--tree-index 1 \
+	--max-iter 50000 \
 	--nthreads 1 \
 	--verbose-log \
 	--seed 1 > quinn_$*.fit.term
@@ -158,3 +158,5 @@ quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow
 			/mnt/cwd/quinn_$*.fit.latent_flow.total_euclidean_distance.tsv \
 			/mnt/cwd/quinn_$*.fit.latent_flow
 
+clean-gexlineage:
+	rm -f *.fit.*

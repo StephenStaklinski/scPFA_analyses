@@ -38,11 +38,14 @@ def parse_args():
     )
     parser.add_argument("summary_tsv")
     parser.add_argument("output_pdf")
+    parser.add_argument("--metric-col", default=None)
+    parser.add_argument("--metric-label", default=None)
+    parser.add_argument("--clone", default=None)
     return parser.parse_args()
 
 
 def parse_condition(condition):
-    prefixes = ["Fl2", "Ll", "Lc", "Fc", "Fo", "Fa", "V"]
+    prefixes = ["Fl2", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "K", "V"]
     parts = {}
     for token in condition.split("_"):
         for prefix in prefixes:
@@ -60,7 +63,7 @@ def is_zero(value):
 
 
 def is_false(value):
-    return str(value).lower() in {"0", "0.0", "false", "no"}
+    return str(value).lower() in {"0", "0.0", "false", "no", "none"}
 
 
 def is_no_penalty_condition(condition):
@@ -68,6 +71,7 @@ def is_no_penalty_condition(condition):
     return (
         is_zero(parts.get("Ll"))
         and is_zero(parts.get("Lc"))
+        and is_zero(parts.get("Lo", "0"))
         and is_zero(parts.get("Fc"))
         and is_zero(parts.get("Fo"))
         and is_false(parts.get("Fa"))
@@ -75,9 +79,45 @@ def is_no_penalty_condition(condition):
     )
 
 
+BASELINE_ORDER_KEYS = ["K", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "Fl2", "V"]
+
+
+def baseline_sort_value(value):
+    if str(value).lower() in {"none", "0", "0.0", "false", "no", ""}:
+        return 0.0
+    if str(value).lower() == "tree":
+        return 1.0
+    if str(value).lower() == "iid":
+        return 2.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def mark_simplest_baseline(df):
+    df = df.copy()
+    df["is_no_penalty"] = False
+    parts = df["condition"].map(parse_condition)
+    for key in BASELINE_ORDER_KEYS:
+        df[key] = parts.map(lambda p, k=key: p.get(k, ""))
+
+    for _, clone_df in df.groupby("clone", sort=True):
+        baseline_idx = min(
+            clone_df.index,
+            key=lambda idx: tuple(
+                baseline_sort_value(df.at[idx, key]) for key in BASELINE_ORDER_KEYS
+            )
+            + (str(df.at[idx, "condition"]),),
+        )
+        df.at[baseline_idx, "is_no_penalty"] = True
+
+    return df
+
+
 def condition_short_label(condition):
     parts = parse_condition(condition)
-    keys = ["Ll", "Lc", "Fc", "Fo", "Fa", "V"]
+    keys = ["K", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "V"]
     return " ".join(f"{key}={parts[key]}" for key in keys if key in parts)
 
 
@@ -106,21 +146,33 @@ def main():
     args = parse_args()
 
     df = pd.read_csv(args.summary_tsv, sep="\t")
-    required_cols = {
-        "clone",
-        "condition",
-        "mean_offdiag_abs_L_correlation",
-        "mean_offdiag_L_correlation",
-    }
+    if args.clone:
+        df = df[df["clone"] == args.clone].copy()
+        if df.empty:
+            sys.stderr.write(f"No rows found for clone '{args.clone}'.\n")
+            return 1
+
+    if args.metric_col:
+        plot_specs = [(args.metric_col, args.metric_label or args.metric_col)]
+    else:
+        plot_specs = [
+            (
+                "mean_offdiag_abs_L_correlation",
+                "Mean off-diagonal |L correlation|",
+            ),
+            (
+                "mean_offdiag_L_correlation",
+                "Mean off-diagonal L correlation",
+            ),
+        ]
+
+    required_cols = {"clone", "condition"} | {col for col, _ in plot_specs}
     missing_cols = required_cols - set(df.columns)
     if missing_cols:
         sys.stderr.write(f"Missing required columns: {sorted(missing_cols)}\n")
         return 1
 
-    numeric_cols = [
-        "mean_offdiag_abs_L_correlation",
-        "mean_offdiag_L_correlation",
-    ]
+    numeric_cols = [col for col, _ in plot_specs]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -138,29 +190,18 @@ def main():
         sys.stderr.write("No complete rows to plot.\n")
         return 1
 
-    df["abs_signed_overlap"] = df["mean_offdiag_L_correlation"].abs()
-    df["is_no_penalty"] = df["condition"].map(is_no_penalty_condition)
+    df = mark_simplest_baseline(df)
     clone_order = sorted(df["clone"].unique())
 
     nrows = len(clone_order)
     fig, axes = plt.subplots(
         nrows,
-        2,
-        figsize=(9.4, 3.3 * nrows),
+        len(plot_specs),
+        figsize=(4.9 * len(plot_specs), 3.3 * nrows),
         sharex="col",
         sharey=False,
         squeeze=False,
     )
-    plot_specs = [
-        (
-            "mean_offdiag_abs_L_correlation",
-            "Mean off-diagonal |L correlation|",
-        ),
-        (
-            "mean_offdiag_L_correlation",
-            "Mean off-diagonal L correlation",
-        ),
-    ]
 
     for row_idx, clone in enumerate(clone_order):
         clone_df = df[df["clone"] == clone]
@@ -236,7 +277,7 @@ def main():
     )
 
     if not df["is_no_penalty"].any():
-        sys.stderr.write("Warning: no all-penalties-off baseline condition found.\n")
+        sys.stderr.write("Warning: no simplest baseline condition found.\n")
 
     fig.subplots_adjust(hspace=0.48, wspace=0.32)
     fig.savefig(args.output_pdf, bbox_inches="tight")

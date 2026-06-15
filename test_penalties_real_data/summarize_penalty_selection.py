@@ -42,6 +42,18 @@ def parse_args():
     parser.add_argument("selected_tsv")
     parser.add_argument("output_pdf")
     parser.add_argument("--worst-tsv", default="worst_penalty_runs.tsv")
+    parser.add_argument("--clone", default=None)
+    parser.add_argument("--overlap-col", default="mean_offdiag_abs_L_correlation")
+    parser.add_argument(
+        "--overlap-label",
+        default="mean |L correlation|",
+        help="Human-readable label for the uniqueness/overlap metric.",
+    )
+    parser.add_argument(
+        "--overlap-higher-is-better",
+        action="store_true",
+        help="Treat larger overlap-col values as more desirable.",
+    )
     parser.add_argument(
         "--top-frac",
         type=float,
@@ -52,7 +64,7 @@ def parse_args():
 
 
 def parse_condition(condition):
-    prefixes = ["Fl2", "Ll", "Lc", "Fc", "Fo", "Fa", "V"]
+    prefixes = ["Fl2", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "K", "V"]
     parts = {}
     for token in condition.split("_"):
         for prefix in prefixes:
@@ -75,7 +87,7 @@ def is_zero(value):
 
 
 def is_false(value):
-    return str(value).lower() in {"0", "0.0", "false", "no"}
+    return str(value).lower() in {"0", "0.0", "false", "no", "none"}
 
 
 def is_no_penalty_condition(condition):
@@ -83,11 +95,45 @@ def is_no_penalty_condition(condition):
     return (
         is_zero(parts.get("Ll"))
         and is_zero(parts.get("Lc"))
+        and is_zero(parts.get("Lo", "0"))
         and is_zero(parts.get("Fc"))
         and is_zero(parts.get("Fo"))
         and is_false(parts.get("Fa"))
         and is_false(parts.get("V"))
     )
+
+
+BASELINE_ORDER_KEYS = ["K", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "Fl2", "V"]
+
+
+def baseline_sort_value(value):
+    if str(value).lower() in {"none", "0", "0.0", "false", "no", ""}:
+        return 0.0
+    if str(value).lower() == "tree":
+        return 1.0
+    if str(value).lower() == "iid":
+        return 2.0
+    value = as_float(value)
+    if math.isnan(value):
+        return float("inf")
+    return value
+
+
+def mark_simplest_baseline(df):
+    df = df.copy()
+    df["is_no_penalty"] = False
+
+    for _, clone_df in df.groupby("clone", sort=True):
+        baseline_idx = min(
+            clone_df.index,
+            key=lambda idx: tuple(
+                baseline_sort_value(df.at[idx, key]) for key in BASELINE_ORDER_KEYS
+            )
+            + (str(df.at[idx, "condition"]),),
+        )
+        df.at[baseline_idx, "is_no_penalty"] = True
+
+    return df
 
 
 def add_likelihood_component(df, component):
@@ -107,20 +153,28 @@ def add_likelihood_component(df, component):
     raise SystemExit(1)
 
 
-def load_summary(path):
+def load_summary(path, overlap_col, clone=None):
     df = pd.read_csv(path, sep="\t")
+    if clone:
+        df = df[df["clone"] == clone].copy()
+        if df.empty:
+            sys.stderr.write(f"No rows found for clone '{clone}' in {path}.\n")
+            raise SystemExit(1)
+
     required_cols = {
         "clone",
         "condition",
-        "mean_offdiag_abs_L_correlation",
         "mean_offdiag_L_correlation",
+        overlap_col,
     }
     missing_cols = required_cols - set(df.columns)
     if missing_cols:
         sys.stderr.write(f"Missing required columns: {sorted(missing_cols)}\n")
         raise SystemExit(1)
 
-    for col in ["mean_offdiag_abs_L_correlation", "mean_offdiag_L_correlation"]:
+    for col in {overlap_col, "mean_offdiag_abs_L_correlation", "mean_offdiag_L_correlation"}:
+        if col not in df.columns:
+            continue
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df["brownian_log_likelihood"] = add_likelihood_component(df, "brownian")
@@ -129,32 +183,45 @@ def load_summary(path):
         df["brownian_log_likelihood"] + df["observation_log_likelihood"]
     )
     df["abs_signed_overlap"] = df["mean_offdiag_L_correlation"].abs()
-    df["is_no_penalty"] = df["condition"].map(is_no_penalty_condition)
 
     parts = df["condition"].map(parse_condition)
-    for key in ["Ll", "Lc", "Fc", "Fo", "Fa", "V"]:
+    for key in BASELINE_ORDER_KEYS:
         df[key] = parts.map(lambda p, k=key: p.get(k, ""))
-    return df.dropna(
+    out = df.dropna(
         subset=[
-            "mean_offdiag_abs_L_correlation",
             "mean_offdiag_L_correlation",
+            overlap_col,
             "total_log_likelihood",
         ]
     ).copy()
+    if out.empty:
+        sys.stderr.write(
+            "No complete rows remain after filtering. "
+            f"Check whether '{overlap_col}' is present and non-missing in {path}.\n"
+        )
+        if overlap_col in df.columns:
+            n_missing = df[overlap_col].isna().sum()
+            sys.stderr.write(
+                f"Rows with missing {overlap_col}: {n_missing} / {len(df)}.\n"
+            )
+        raise SystemExit(1)
+    return mark_simplest_baseline(out)
 
 
-def add_baseline_deltas(df):
+def add_baseline_deltas(df, overlap_col, overlap_higher_is_better):
     out = []
     for clone, clone_df in df.groupby("clone", sort=True):
         default_df = clone_df[clone_df["is_no_penalty"]]
         if default_df.empty:
-            sys.stderr.write(f"Warning: no no-penalty baseline for {clone}; skipping.\n")
+            sys.stderr.write(f"Warning: no simplest baseline for {clone}; skipping.\n")
             continue
 
         default = default_df.iloc[0]
         clone_df = clone_df.copy()
         clone_df["default_total_log_likelihood"] = default["total_log_likelihood"]
-        clone_df["default_abs_overlap"] = default["mean_offdiag_abs_L_correlation"]
+        clone_df["overlap_metric"] = clone_df[overlap_col]
+        clone_df["default_overlap_metric"] = default[overlap_col]
+        clone_df["default_abs_overlap"] = default[overlap_col]
         clone_df["default_abs_signed_overlap"] = default["abs_signed_overlap"]
         clone_df["log_likelihood_delta"] = (
             clone_df["total_log_likelihood"] - default["total_log_likelihood"]
@@ -162,10 +229,11 @@ def add_baseline_deltas(df):
         clone_df["log_likelihood_loss"] = (
             default["total_log_likelihood"] - clone_df["total_log_likelihood"]
         ).clip(lower=0)
-        clone_df["abs_overlap_improvement"] = (
-            default["mean_offdiag_abs_L_correlation"]
-            - clone_df["mean_offdiag_abs_L_correlation"]
-        )
+        if overlap_higher_is_better:
+            clone_df["overlap_improvement"] = clone_df[overlap_col] - default[overlap_col]
+        else:
+            clone_df["overlap_improvement"] = default[overlap_col] - clone_df[overlap_col]
+        clone_df["abs_overlap_improvement"] = clone_df["overlap_improvement"]
         clone_df["signed_overlap_improvement"] = (
             default["abs_signed_overlap"] - clone_df["abs_signed_overlap"]
         )
@@ -184,9 +252,9 @@ def score_tradeoffs(df):
         clone_df["log_likelihood_loss_rank"] = clone_df["log_likelihood_loss"].rank(
             method="min", ascending=True
         )
-        clone_df["abs_overlap_improvement_rank"] = clone_df[
-            "abs_overlap_improvement"
-        ].rank(method="min", ascending=False)
+        clone_df["abs_overlap_improvement_rank"] = clone_df["overlap_improvement"].rank(
+            method="min", ascending=False
+        )
         clone_df["tradeoff_rank"] = (
             clone_df["log_likelihood_loss_rank"]
             + clone_df["abs_overlap_improvement_rank"]
@@ -237,6 +305,7 @@ def penalty_active(row, key):
 PENALTY_LABELS = {
     "Ll": "L L1",
     "Lc": "L corr.",
+    "Lo": "L overlap",
     "Fc": "F corr.",
     "Fo": "F orth.",
     "Fa": "Final absorbing",
@@ -359,7 +428,7 @@ def plot_combination_panel(subplot_spec, selected_clone, title, color):
     return ax_bar, ax_marginal, ax_matrix
 
 
-def make_plot(scored_df, selected_df, worst_df, output_pdf):
+def make_plot(scored_df, selected_df, worst_df, output_pdf, overlap_label):
     clone_order = sorted(scored_df["clone"].unique())
     legend_handles = [
         Line2D(
@@ -419,7 +488,7 @@ def make_plot(scored_df, selected_df, worst_df, output_pdf):
 
         ax = fig.add_subplot(outer[row_idx, 0])
         ax.scatter(
-            clone_df["abs_overlap_improvement"],
+            clone_df["overlap_improvement"],
             clone_df["log_likelihood_delta"],
             s=42,
             color="#F0E442",
@@ -428,7 +497,7 @@ def make_plot(scored_df, selected_df, worst_df, output_pdf):
             alpha=0.85,
         )
         ax.scatter(
-            selected_clone["abs_overlap_improvement"],
+            selected_clone["overlap_improvement"],
             selected_clone["log_likelihood_delta"],
             s=56,
             color="#56B4E9",
@@ -437,7 +506,7 @@ def make_plot(scored_df, selected_df, worst_df, output_pdf):
             alpha=0.95,
         )
         ax.scatter(
-            worst_clone["abs_overlap_improvement"],
+            worst_clone["overlap_improvement"],
             worst_clone["log_likelihood_delta"],
             s=56,
             color="#009E73",
@@ -449,7 +518,7 @@ def make_plot(scored_df, selected_df, worst_df, output_pdf):
         if not default_df.empty:
             default = default_df.iloc[0]
             ax.scatter(
-                [default["abs_overlap_improvement"]],
+                [default["overlap_improvement"]],
                 [default["log_likelihood_delta"]],
                 s=110,
                 color="#E69F00",
@@ -461,7 +530,7 @@ def make_plot(scored_df, selected_df, worst_df, output_pdf):
         ax.axhline(0, color="0.2", linewidth=0.8, linestyle=":", alpha=0.8)
         ax.axvline(0, color="0.2", linewidth=0.8, linestyle=":", alpha=0.8)
         ax.set_title(clone)
-        ax.set_xlabel("Reduction in mean |L correlation| vs. default")
+        ax.set_xlabel(f"Improvement in {overlap_label} vs. default")
         ax.set_ylabel("Log-likelihood change vs. default")
         ax.grid(True, axis="both", linewidth=0.5, alpha=0.35)
         ax.set_axisbelow(True)
@@ -503,8 +572,12 @@ def main():
         sys.stderr.write("--top-frac must be in (0, 1].\n")
         return 1
 
-    df = load_summary(args.summary_tsv)
-    scored_df = add_baseline_deltas(df)
+    df = load_summary(args.summary_tsv, args.overlap_col, args.clone)
+    scored_df = add_baseline_deltas(
+        df,
+        args.overlap_col,
+        args.overlap_higher_is_better,
+    )
     scored_df = score_tradeoffs(scored_df)
     selected_df = select_top_runs(scored_df, args.top_frac)
     worst_df = select_worst_runs(scored_df, args.top_frac)
@@ -513,25 +586,31 @@ def main():
         "clone",
         "condition",
         "total_log_likelihood",
-        "default_total_log_likelihood",
         "log_likelihood_delta",
         "log_likelihood_loss",
-        "mean_offdiag_abs_L_correlation",
-        "default_abs_overlap",
-        "abs_overlap_improvement",
-        "mean_offdiag_L_correlation",
-        "signed_overlap_improvement",
+        "overlap_metric",
+        "overlap_improvement",
         "tradeoff_rank",
         "Ll",
         "Lc",
+        "Lo",
         "Fc",
         "Fo",
         "Fa",
         "V",
     ]
-    selected_df[output_cols].to_csv(args.selected_tsv, sep="\t", index=False)
-    worst_df[output_cols].to_csv(args.worst_tsv, sep="\t", index=False)
-    make_plot(scored_df, selected_df, worst_df, args.output_pdf)
+    output_cols = [col for col in output_cols if col in selected_df.columns]
+    rename_cols = {
+        "overlap_metric": args.overlap_col,
+        "overlap_improvement": f"{args.overlap_col}_improvement",
+    }
+    selected_df[output_cols].rename(columns=rename_cols).to_csv(
+        args.selected_tsv, sep="\t", index=False
+    )
+    worst_df[output_cols].rename(columns=rename_cols).to_csv(
+        args.worst_tsv, sep="\t", index=False
+    )
+    make_plot(scored_df, selected_df, worst_df, args.output_pdf, args.overlap_label)
     print(f"Saved selected runs to: {args.selected_tsv}")
     print(f"Saved worst runs to: {args.worst_tsv}")
     print(f"Saved figure to: {args.output_pdf}")

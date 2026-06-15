@@ -13,6 +13,7 @@ def parse_args():
     )
     parser.add_argument("--runs-dir", default="runs")
     parser.add_argument("--output", default="overlap_summary.tsv")
+    parser.add_argument("--clone", default=None)
     return parser.parse_args()
 
 
@@ -92,6 +93,9 @@ def main():
             continue
         prefix = corr_path.with_suffix("")
         prefix = Path(str(prefix).removesuffix(".L.pearson_correlation"))
+        clone = prefix.parent.name
+        if args.clone and clone != args.clone:
+            continue
         log_path = Path(f"{prefix}.log")
         if not log_path.exists():
             sys.stderr.write(f"Skipping incomplete run: {prefix}\n")
@@ -101,7 +105,7 @@ def main():
         values = best_fit_values_from_log(log_path)
         rows.append(
             {
-                "clone": prefix.parent.name,
+                "clone": clone,
                 "condition": prefix.name,
                 "mean_offdiag_abs_L_correlation": mean_abs,
                 "mean_offdiag_L_correlation": mean_signed,

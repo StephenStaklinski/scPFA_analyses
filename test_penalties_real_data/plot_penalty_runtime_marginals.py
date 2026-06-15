@@ -33,8 +33,10 @@ plt.rcParams.update(
 )
 
 PENALTIES = [
+    ("K", "K"),
     ("Ll", "L l1"),
     ("Lc", "L corr."),
+    ("Lo", "L overlap"),
     ("Fc", "F corr."),
     ("Fo", "F orth."),
     ("Fa", "Final absorbing"),
@@ -85,7 +87,7 @@ def parse_elapsed_to_seconds(text):
 
 
 def parse_condition(condition):
-    prefixes = ["Fl2", "Ll", "Lc", "Fc", "Fo", "Fa", "V"]
+    prefixes = ["Fl2", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "K", "V"]
     parts = {}
     for token in condition.split("_"):
         for prefix in prefixes:
@@ -96,7 +98,11 @@ def parse_condition(condition):
 
 
 def setting_label(key, value):
-    return "Off" if str(value).lower() in {"0", "0.0", "false", "no"} else "On"
+    if key == "K":
+        return str(value)
+    if str(value).lower() in {"0", "0.0", "false", "no", "none"}:
+        return "Off"
+    return str(value) if key == "Fa" else "On"
 
 
 def load_runtime_rows(paths):
@@ -160,7 +166,18 @@ def main():
         return 1
 
     penalty_order = [label for _, label in PENALTIES]
-    setting_order = [value for value in ["Off", "On"] if value in set(long_df["setting"])]
+    seen_settings = set(long_df["setting"])
+    setting_rank = {"tree": 0, "iid": 1}
+    numeric_settings = sorted(
+        (value for value in seen_settings if value not in {"Off", "On"}),
+        key=lambda value: (
+            0,
+            float(value),
+        ) if re.fullmatch(r"[0-9.]+", value) else (1, setting_rank.get(value, 99), value),
+    )
+    setting_order = [
+        value for value in ["Off", "On"] + numeric_settings if value in seen_settings
+    ]
     palette = {
         "Off": "#E69F00",
         "On": "#56B4E9",

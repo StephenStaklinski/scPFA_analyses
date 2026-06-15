@@ -35,7 +35,7 @@ FACTORHEATMAPS := tls1.fit.L.factor_heatmap.pdf tls2.fit.L.factor_heatmap.pdf
 FLOWTREES := tls1.fit.latent_flow.factor_trees.pdf tls2.fit.latent_flow.factor_trees.pdf
 EUCLIDEANPSEUDOTIME := tls1.fit.latent_flow.euclidean_factor_pseudotime.pdf tls2.fit.latent_flow.euclidean_factor_pseudotime.pdf
 
-all: prep_data run_vine
+all: prep_data run_vine gexlineage plotting
 
 prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
 palantir: $(PALANTIRTRAJECTORIES)
@@ -103,12 +103,12 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	--tree-total-time 1.0 \
 	--outprefix $*.fit \
 	--filter-test moran \
-	--dim 6 \
-	--final-absorbing-factor \
-	--final-absorbing-L-l2-strength 1e-4 \
-	--L-l1-strength 5.0 \
-	--varimax \
-	--max-iter 10000 \
+	--dim 5 \
+	--L-l1-strength 10 \
+	--L-loading-overlap-strength 10 \
+	--remove-ribo-mito-genes \
+	--tree-index 1 \
+	--max-iter 50000 \
 	--nthreads 1 \
 	--verbose-log \
 	--seed 1 > $*.fit.term
@@ -155,3 +155,5 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 			/mnt/cwd/$*.fit.latent_flow.total_euclidean_distance.tsv \
 			/mnt/cwd/$*.fit.latent_flow
 
+clean-gexlineage:
+	rm -f *.fit.*
