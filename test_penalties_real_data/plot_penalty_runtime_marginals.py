@@ -33,14 +33,10 @@ plt.rcParams.update(
 )
 
 PENALTIES = [
-    ("K", "K"),
-    ("Ll", "L l1"),
-    ("Lc", "L corr."),
-    ("Lo", "L overlap"),
-    ("Fc", "F corr."),
-    ("Fo", "F orth."),
+    ("Rm", "Remove ribo/mito"),
     ("Fa", "Final absorbing"),
-    ("V", "Varimax"),
+    ("Ll", "L l1"),
+    ("Lo", "L overlap"),
 ]
 
 
@@ -87,7 +83,7 @@ def parse_elapsed_to_seconds(text):
 
 
 def parse_condition(condition):
-    prefixes = ["Fl2", "Ll", "Lc", "Lo", "Fc", "Fo", "Fa", "K", "V"]
+    prefixes = ["Ll", "Lo", "Rm", "Fa", "K", "T"]
     parts = {}
     for token in condition.split("_"):
         for prefix in prefixes:
@@ -100,9 +96,11 @@ def parse_condition(condition):
 def setting_label(key, value):
     if key == "K":
         return str(value)
+    if key in {"Rm", "Fa"}:
+        return "On" if str(value).lower() not in {"0", "0.0", "false", "no", "none"} else "Off"
     if str(value).lower() in {"0", "0.0", "false", "no", "none"}:
         return "Off"
-    return str(value) if key == "Fa" else "On"
+    return str(value)
 
 
 def load_runtime_rows(paths):

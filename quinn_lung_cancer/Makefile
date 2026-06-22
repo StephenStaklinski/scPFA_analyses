@@ -112,11 +112,12 @@ quinn_%.fit.summary.tsv quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv qu
 	--outprefix quinn_$*.fit \
 	--filter-test $$FILTERTEST \
 	--dim 5 \
-	--L-l1-strength 10 \
-	--L-loading-overlap-strength 10 \
+	--L-l1-strength 0.1 \
+	--L-loading-overlap-strength 1 \
+	--normalize-regularization-scale \
 	--remove-ribo-mito-genes \
 	--tree-index 1 \
-	--max-iter 50000 \
+	--max-iter 100000 \
 	--nthreads 1 \
 	--verbose-log \
 	--seed 1 > quinn_$*.fit.term

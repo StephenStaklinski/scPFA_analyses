@@ -16,8 +16,7 @@ PYTHON ?= /home/staklins/miniforge3/envs/pyplotting/bin/python
 
 # CLONES can include TLS clones, such as tls1/tls2, and Quinn shorthand clones,
 # such as quinn30 for Quinn CP 30.
-# CLONES ?= tls1 tls2
-CLONES ?= quinn10
+CLONES ?= tls1
 
 # Ability to downsample the input data for testing. Leave these empty to use the full data.
 DOWNSAMPLE_CELLS ?= 
@@ -26,30 +25,28 @@ DOWNSAMPLE_ENABLED := $(strip $(DOWNSAMPLE_CELLS)$(DOWNSAMPLE_GENES))
 DOWNSAMPLE_CELLS_LABEL := $(if $(strip $(DOWNSAMPLE_CELLS)),$(DOWNSAMPLE_CELLS),all)
 DOWNSAMPLE_GENES_LABEL := $(if $(strip $(DOWNSAMPLE_GENES)),$(DOWNSAMPLE_GENES),all)
 
-# These lists define the sweep. Keep them short at first; the total number of
-# runs is the product of clones and all value-list lengths.
-L_L1_STRENGTHS ?= 5.0
-L_CORRELATION_STRENGTHS ?= 0
-L_LOADING_OVERLAP_STRENGTHS ?= 100
-F_CORRELATION_STRENGTHS ?= 0
-F_ORTHOGONALITY_STRENGTHS ?= 0
-FINAL_ABSORBING_VALUES ?= none
-FINAL_ABSORBING_L2_STRENGTHS ?= 0
-VARIMAX_VALUES ?= 0
+# Sweep axes. The default grid varies only L1 and L-loading overlap.
+# Set RIBO_MITO_VALUES="0 1" or FINAL_ABSORBING_VALUES="0 1" when you want
+# those model/preprocessing toggles included in the same interpretable grid.
+L_L1_STRENGTHS ?= 0 0.001 0.01 0.1 1 10 100
+L_LOADING_OVERLAP_STRENGTHS ?= 0 0.001 0.01 0.1 1 10 100
+RIBO_MITO_VALUES ?= 0
+FINAL_ABSORBING_VALUES ?= 0
+FINAL_ABSORBING_L2_STRENGTH ?= 0
 
 TREE_MODES ?= one
 TREE_INDEX ?= 1
-RIBO_MITO_VALUES ?= 1
 TREE_TOTAL_TIME ?= 1.0
 DIM ?= 5
 DIM_VALUES ?= $(DIM)
-MAX_ITER ?= 20000
+MAX_ITER ?= 100000
 NTHREADS ?= 1
 SEED ?= 1
 
 BASE_GEXLINEAGE_OPTS := \
 	--tree-total-time $(TREE_TOTAL_TIME) \
 	--filter-test moran \
+	--normalize-regularization-scale \
 	--max-iter $(MAX_ITER) \
 	--nthreads $(NTHREADS) \
 	--verbose-log \
@@ -87,29 +84,24 @@ define RIBO_MITO_OPTS
 $(if $(filter 1 true yes,$(1)),--remove-ribo-mito-genes,)
 endef
 
+define FINAL_ABSORBING_OPTS
+$(if $(filter 1 true yes,$(1)),--final-absorbing-factor --final-absorbing-L-l2-strength $(FINAL_ABSORBING_L2_STRENGTH),)
+endef
+
 define GEX_INPUT
 $(if $(DOWNSAMPLE_ENABLED),runs/gex_inputs/$(1).cells$(DOWNSAMPLE_CELLS_LABEL).genes$(DOWNSAMPLE_GENES_LABEL).tsv,$(call RAW_GEX_INPUT,$(1)))
 endef
 
 define CONDITION_NAME
-T$(1)_Rm$(2)_K$(3)_Ll$(4)_Lc$(5)_Lo$(6)_Fc$(7)_Fo$(8)_Fa$(9)_Fl2$(10)_V$(11)
+T$(1)_Rm$(2)_Fa$(3)_K$(4)_Ll$(5)_Lo$(6)
 endef
 
 define CONDITION_OPTS
 --L-l1-strength $(1) \
-$(if $(filter-out 0 0.0 0.00 0.000,$(2)),--L-correlation-strength $(2),) \
-$(if $(filter-out 0 0.0 0.00 0.000,$(3)),--L-loading-overlap-strength $(3),) \
-$(if $(filter-out 0 0.0 0.00 0.000,$(4)),--F-correlation-strength $(4),) \
-$(if $(filter-out 0 0.0 0.00 0.000,$(5)),--F-orthogonality-strength $(5),) \
-$(if $(filter-out none 0 0.0 false no,$(6)),--final-absorbing-factor $(6) --final-absorbing-L-l2-strength $(7),) \
-$(if $(filter 1 true yes,$(8)),--varimax,)
+$(if $(filter-out 0 0.0 0.00 0.000,$(2)),--L-loading-overlap-strength $(2),)
 endef
 
-define ABSORBING_L2_VALUES
-$(if $(filter none 0 0.0 false no,$(1)),0,$(FINAL_ABSORBING_L2_STRENGTHS))
-endef
-
-CONDITIONS := $(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(foreach k,$(DIM_VALUES),$(foreach ll1,$(L_L1_STRENGTHS),$(foreach lc,$(L_CORRELATION_STRENGTHS),$(foreach lo,$(L_LOADING_OVERLAP_STRENGTHS),$(foreach fc,$(F_CORRELATION_STRENGTHS),$(foreach fo,$(F_ORTHOGONALITY_STRENGTHS),$(foreach fa,$(FINAL_ABSORBING_VALUES),$(foreach fl2,$(call ABSORBING_L2_VALUES,$(fa)),$(foreach vx,$(VARIMAX_VALUES),$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(tm)),$(rm),$(k),$(ll1),$(lc),$(lo),$(fc),$(fo),$(fa),$(fl2),$(vx)))))))))))))
+CONDITIONS := $(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(foreach fa,$(FINAL_ABSORBING_VALUES),$(foreach k,$(DIM_VALUES),$(foreach ll1,$(L_L1_STRENGTHS),$(foreach lo,$(L_LOADING_OVERLAP_STRENGTHS),$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(tm)),$(rm),$(fa),$(k),$(ll1),$(lo))))))))
 
 define CLONE_RUN_PREFIXES
 $(foreach cond,$(CONDITIONS),runs/$(1)/$(cond))
@@ -127,51 +119,33 @@ RUN_GSEAS := $(addsuffix .L.gsea.tsv,$(RUN_PREFIXES))
 RUN_GSEA_TERMS := $(addsuffix .gsea.term,$(RUN_PREFIXES))
 RUN_TOP_GENES := $(addsuffix .L.top_genes.tsv,$(RUN_PREFIXES))
 SUMMARY_DIRS := $(foreach clone,$(CLONES),runs/$(clone)_summary)
-L_CORR_SUMMARY_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/summary.l_correlation.$(clone).tsv)
-GSEA_SUMMARY_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/summary.gsea_jaccard.$(clone).tsv)
-TOP_GENE_SUMMARY_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/summary.top_genes_jaccard.$(clone).tsv)
-RUNTIME_SUMMARY_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/summary.runtime.$(clone).tsv)
-L_CORR_PLOT_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/sweep_summary.l_correlation.$(clone).pdf)
-GSEA_PLOT_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/sweep_summary.gsea_jaccard.$(clone).pdf)
-TOP_GENE_PLOT_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/sweep_summary.top_genes_jaccard.$(clone).pdf)
-RUNTIME_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/runtime_marginals.$(clone).pdf)
-PENALTY_SELECTION_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/selected_penalty_runs.l_correlation.$(clone).tsv)
-PENALTY_WORST_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/worst_penalty_runs.l_correlation.$(clone).tsv)
-PENALTY_SELECTION_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/penalty_selection.l_correlation.$(clone).pdf)
-PENALTY_GSEA_SELECTION_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/selected_penalty_runs.gsea_jaccard.$(clone).tsv)
-PENALTY_GSEA_WORST_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/worst_penalty_runs.gsea_jaccard.$(clone).tsv)
-PENALTY_GSEA_SELECTION_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/penalty_selection.gsea_jaccard.$(clone).pdf)
-PENALTY_TOP_GENE_SELECTION_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/selected_penalty_runs.top_genes_jaccard.$(clone).tsv)
-PENALTY_TOP_GENE_WORST_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/worst_penalty_runs.top_genes_jaccard.$(clone).tsv)
-PENALTY_TOP_GENE_SELECTION_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/penalty_selection.top_genes_jaccard.$(clone).pdf)
-OLD_SUMMARY_OUTPUTS := overlap_summary.tsv overlap_summary_gsea.tsv overlap_summary_top_genes.tsv penalty_runtime_summary.tsv
-OLD_PLOT_OUTPUTS := sweep_summary_plots.pdf sweep_summary_gsea_plots.pdf sweep_summary_top_gene_plots.pdf penalty_runtime_marginals.pdf penalty_selection_plots.pdf penalty_selection_gsea_plots.pdf penalty_selection_top_gene_plots.pdf
-OLD_CLONE_OUTPUTS := $(foreach clone,$(CLONES),overlap_summary.$(clone).tsv overlap_summary_gsea.$(clone).tsv overlap_summary_top_genes.$(clone).tsv summary.l_correlation.$(clone).tsv summary.gsea.$(clone).tsv summary.gsea_jaccard.$(clone).tsv summary.top_genes.$(clone).tsv summary.top_genes_jaccard.$(clone).tsv summary.runtime.$(clone).tsv sweep_summary_plots.$(clone).pdf sweep_summary_gsea_plots.$(clone).pdf sweep_summary_top_gene_plots.$(clone).pdf sweep_summary.l_correlation.$(clone).pdf sweep_summary.gsea.$(clone).pdf sweep_summary.gsea_jaccard.$(clone).pdf sweep_summary.top_genes.$(clone).pdf sweep_summary.top_genes_jaccard.$(clone).pdf runtime_marginals.$(clone).pdf selected_penalty_runs.$(clone).tsv worst_penalty_runs.$(clone).tsv penalty_selection_plots.$(clone).pdf selected_penalty_gsea_runs.$(clone).tsv worst_penalty_gsea_runs.$(clone).tsv penalty_selection_gsea_plots.$(clone).pdf selected_penalty_top_gene_runs.$(clone).tsv worst_penalty_top_gene_runs.$(clone).tsv penalty_selection_top_gene_plots.$(clone).pdf selected_penalty_runs.l_correlation.$(clone).tsv worst_penalty_runs.l_correlation.$(clone).tsv penalty_selection.l_correlation.$(clone).pdf selected_penalty_runs.gsea.$(clone).tsv worst_penalty_runs.gsea.$(clone).tsv penalty_selection.gsea.$(clone).pdf selected_penalty_runs.gsea_jaccard.$(clone).tsv worst_penalty_runs.gsea_jaccard.$(clone).tsv penalty_selection.gsea_jaccard.$(clone).pdf selected_penalty_runs.top_genes.$(clone).tsv worst_penalty_runs.top_genes.$(clone).tsv penalty_selection.top_genes.$(clone).pdf selected_penalty_runs.top_genes_jaccard.$(clone).tsv worst_penalty_runs.top_genes_jaccard.$(clone).tsv penalty_selection.top_genes_jaccard.$(clone).pdf)
+SELECTION_TOP_N ?= 10
+SELECTION_SUMMARY_TSVS := $(foreach clone,$(CLONES),runs/$(clone)_summary/selection_metrics.$(clone).tsv)
+PENALTY_HEATMAP_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/penalty_heatmap.$(clone).pdf)
 GSEA_PADJ_CUTOFF ?= 1.0
 GSEA_TOP_N ?= 20
+GSEA_HEATMAP_PADJ_CUTOFF ?= 0.05
+GSEA_HEATMAP_PDFS := $(foreach clone,$(CLONES),runs/$(clone)_summary/gsea_heatmap.$(clone).pdf)
 
 all: run metrics plots
 run: $(RUN_SUMMARIES)
-metrics: $(L_CORR_SUMMARY_TSVS) $(GSEA_SUMMARY_TSVS) $(TOP_GENE_SUMMARY_TSVS) $(RUNTIME_SUMMARY_TSVS) $(PENALTY_SELECTION_TSVS) $(PENALTY_WORST_TSVS) $(RUN_GSEAS)
-plots: $(RUN_LOG_PDFS) $(RUN_FACTOR_HEATMAPS) $(RUN_FLOWTREES) $(L_CORR_PLOT_PDFS) $(GSEA_PLOT_PDFS) $(TOP_GENE_PLOT_PDFS) $(RUNTIME_PDFS) $(PENALTY_SELECTION_PDFS) $(PENALTY_GSEA_SELECTION_PDFS) $(PENALTY_TOP_GENE_SELECTION_PDFS)
+metrics: $(SELECTION_SUMMARY_TSVS)
+plots: $(RUN_FACTOR_HEATMAPS) $(RUN_FLOWTREES) $(RUN_GSEAS) $(PENALTY_HEATMAP_PDFS) $(GSEA_HEATMAP_PDFS)
 
 print-config:
 	@echo "CLONES=$(CLONES)"
 	@echo "CONDITIONS=$(CONDITIONS)"
 	@echo "L_L1_STRENGTHS=$(L_L1_STRENGTHS)"
-	@echo "L_CORRELATION_STRENGTHS=$(L_CORRELATION_STRENGTHS)"
 	@echo "L_LOADING_OVERLAP_STRENGTHS=$(L_LOADING_OVERLAP_STRENGTHS)"
-	@echo "F_CORRELATION_STRENGTHS=$(F_CORRELATION_STRENGTHS)"
-	@echo "F_ORTHOGONALITY_STRENGTHS=$(F_ORTHOGONALITY_STRENGTHS)"
-	@echo "FINAL_ABSORBING_VALUES=$(FINAL_ABSORBING_VALUES)"
-	@echo "FINAL_ABSORBING_L2_STRENGTHS=$(FINAL_ABSORBING_L2_STRENGTHS)"
-	@echo "VARIMAX_VALUES=$(VARIMAX_VALUES)"
 	@echo "TREE_MODES=$(TREE_MODES)"
 	@echo "TREE_INDEX=$(TREE_INDEX)"
 	@echo "RIBO_MITO_VALUES=$(RIBO_MITO_VALUES)"
+	@echo "FINAL_ABSORBING_VALUES=$(FINAL_ABSORBING_VALUES)"
+	@echo "FINAL_ABSORBING_L2_STRENGTH=$(FINAL_ABSORBING_L2_STRENGTH)"
 	@echo "DIM_VALUES=$(DIM_VALUES)"
 	@echo "DOWNSAMPLE_CELLS=$(DOWNSAMPLE_CELLS)"
 	@echo "DOWNSAMPLE_GENES=$(DOWNSAMPLE_GENES)"
+	@echo "SELECTION_TOP_N=$(SELECTION_TOP_N)"
 	@echo "GSEA_PADJ_CUTOFF=$(GSEA_PADJ_CUTOFF)"
 	@echo "GSEA_TOP_N=$(GSEA_TOP_N)"
 	@echo "GEXLINEAGE=$(GEXLINEAGE)"
@@ -210,33 +184,34 @@ endef
 $(foreach clone,$(CLONES),$(eval $(call GEX_INPUT_TEMPLATE,$(clone))))
 
 define RUN_TEMPLATE
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).summary.tsv: \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).summary.tsv: \
 $(call RUN_TREE_INPUT,$(1),$(2)) $(call GEX_INPUT,$(1))
 	mkdir -p runs/$(1)
-	/usr/bin/time -o runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).time $(GEXLINEAGE) \
+	/usr/bin/time -o runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).time $(GEXLINEAGE) \
 		--trees $(call RUN_TREE_INPUT,$(1),$(2)) \
 		--expr $(call GEX_INPUT,$(1)) \
-		--outprefix runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)) \
+		--outprefix runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)) \
 		$(BASE_GEXLINEAGE_OPTS) \
-		--dim $(4) \
+		--dim $(5) \
 		$(call TREE_MODE_OPTS,$(2)) \
 		$(call RIBO_MITO_OPTS,$(3)) \
-		$(call CONDITION_OPTS,$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)) > runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).term
+		$(call FINAL_ABSORBING_OPTS,$(4)) \
+		$(call CONDITION_OPTS,$(6),$(7)) > runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).term
 
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).term \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).time \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).F.tsv \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).L.tsv \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).L.top_genes.tsv \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).X.tsv \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).log \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).latent_flow.tsv \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).L.pearson_correlation.tsv: \
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7),$(8),$(9),$(10),$(11),$(12)).summary.tsv
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).term \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).time \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).F.tsv \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).L.tsv \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).L.top_genes.tsv \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).X.tsv \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).log \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).latent_flow.tsv \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).L.pearson_correlation.tsv: \
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6),$(7)).summary.tsv
 	@test -e $$@ || { echo "ERROR: expected output missing after gexLineage run: $$@" >&2; exit 1; }
 endef
 
-$(foreach clone,$(CLONES),$(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(foreach k,$(DIM_VALUES),$(foreach ll1,$(L_L1_STRENGTHS),$(foreach lc,$(L_CORRELATION_STRENGTHS),$(foreach lo,$(L_LOADING_OVERLAP_STRENGTHS),$(foreach fc,$(F_CORRELATION_STRENGTHS),$(foreach fo,$(F_ORTHOGONALITY_STRENGTHS),$(foreach fa,$(FINAL_ABSORBING_VALUES),$(foreach fl2,$(call ABSORBING_L2_VALUES,$(fa)),$(foreach vx,$(VARIMAX_VALUES),$(eval $(call RUN_TEMPLATE,$(clone),$(tm),$(rm),$(k),$(ll1),$(lc),$(lo),$(fc),$(fo),$(fa),$(fl2),$(vx)))))))))))))))
+$(foreach clone,$(CLONES),$(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(foreach fa,$(FINAL_ABSORBING_VALUES),$(foreach k,$(DIM_VALUES),$(foreach ll1,$(L_L1_STRENGTHS),$(foreach lo,$(L_LOADING_OVERLAP_STRENGTHS),$(eval $(call RUN_TEMPLATE,$(clone),$(tm),$(rm),$(fa),$(k),$(ll1),$(lo))))))))))
 
 define RUNTIME_TEMPLATE
 runs/$(1)_summary/summary.runtime.$(1).tsv: $(foreach cond,$(CONDITIONS),runs/$(1)/$(cond).time) plot_penalty_runtime_marginals.py
@@ -325,71 +300,28 @@ $(foreach clone,$(CLONES),$(eval $(call RUNTIME_TEMPLATE,$(clone))))
 		/mnt/benchmarks/test_penalties_real_data/$*.L.gsea > $*.gsea.term
 
 define SUMMARY_TEMPLATE
-runs/$(1)_summary/summary.l_correlation.$(1).tsv: $(addsuffix .overlap.tsv,$(call CLONE_RUN_PREFIXES,$(1))) summarize_overlap_metrics.py
+runs/$(1)_summary/selection_metrics.$(1).tsv: $(foreach cond,$(CONDITIONS),runs/$(1)/$(cond).log runs/$(1)/$(cond).L.pearson_correlation.tsv runs/$(1)/$(cond).L.top_genes.tsv) summarize_selection_metrics.py
 	mkdir -p runs/$(1)_summary
-	$(PYTHON) summarize_overlap_metrics.py --runs-dir runs --output $$@ --clone $(1)
-
-runs/$(1)_summary/sweep_summary.l_correlation.$(1).pdf: runs/$(1)_summary/summary.l_correlation.$(1).tsv plot_sweep_summary.py
-	$(PYTHON) plot_sweep_summary.py $$< $$@ --clone $(1)
-
-runs/$(1)_summary/sweep_summary.gsea_jaccard.$(1).pdf: runs/$(1)_summary/summary.gsea_jaccard.$(1).tsv plot_sweep_summary.py
-	$(PYTHON) plot_sweep_summary.py $$< $$@ \
+	$(PYTHON) summarize_selection_metrics.py --runs-dir runs --output $$@ \
 		--clone $(1) \
-		--metric-col gsea_uniqueness \
-		--metric-label "GSEA uniqueness (1 - mean Jaccard)"
+		--top-n $(SELECTION_TOP_N) \
+		--conditions $(CONDITIONS)
 
-runs/$(1)_summary/sweep_summary.top_genes_jaccard.$(1).pdf: runs/$(1)_summary/summary.top_genes_jaccard.$(1).tsv plot_sweep_summary.py
-	$(PYTHON) plot_sweep_summary.py $$< $$@ \
-		--clone $(1) \
-		--metric-col top_gene_mean_pairwise_jaccard \
-		--metric-label "Mean pairwise Jaccard of top up/down genes"
+runs/$(1)_summary/penalty_heatmap.$(1).pdf: runs/$(1)_summary/selection_metrics.$(1).tsv plot_penalty_heatmap.py
+	$(PYTHON) plot_penalty_heatmap.py $$< $$@ --clone $(1)
 
-runs/$(1)_summary/selected_penalty_runs.l_correlation.$(1).tsv: runs/$(1)_summary/summary.l_correlation.$(1).tsv summarize_penalty_selection.py
-	$(PYTHON) summarize_penalty_selection.py $$< runs/$(1)_summary/selected_penalty_runs.l_correlation.$(1).tsv runs/$(1)_summary/penalty_selection.l_correlation.$(1).pdf \
-		--worst-tsv runs/$(1)_summary/worst_penalty_runs.l_correlation.$(1).tsv \
-		--clone $(1)
-
-runs/$(1)_summary/worst_penalty_runs.l_correlation.$(1).tsv runs/$(1)_summary/penalty_selection.l_correlation.$(1).pdf: runs/$(1)_summary/selected_penalty_runs.l_correlation.$(1).tsv
-	@test -e $$@ || { echo "ERROR: expected output missing: $$@" >&2; exit 1; }
-
-runs/$(1)_summary/summary.gsea_jaccard.$(1).tsv: runs/$(1)_summary/summary.l_correlation.$(1).tsv $(addsuffix .L.gsea.tsv,$(call CLONE_RUN_PREFIXES,$(1))) summarize_gsea_uniqueness.py
-	$(PYTHON) summarize_gsea_uniqueness.py --runs-dir runs --base-summary $$< --output $$@ \
-		--clone $(1) \
-		--padj-cutoff $(GSEA_PADJ_CUTOFF) \
-		--top-n $(GSEA_TOP_N)
-
-runs/$(1)_summary/summary.top_genes_jaccard.$(1).tsv: runs/$(1)_summary/summary.l_correlation.$(1).tsv $(addsuffix .L.top_genes.tsv,$(call CLONE_RUN_PREFIXES,$(1))) summarize_top_gene_jaccard.py
-	$(PYTHON) summarize_top_gene_jaccard.py --runs-dir runs --base-summary $$< --output $$@ --clone $(1)
-
-runs/$(1)_summary/selected_penalty_runs.gsea_jaccard.$(1).tsv: runs/$(1)_summary/summary.gsea_jaccard.$(1).tsv summarize_penalty_selection.py
-	$(PYTHON) summarize_penalty_selection.py $$< runs/$(1)_summary/selected_penalty_runs.gsea_jaccard.$(1).tsv runs/$(1)_summary/penalty_selection.gsea_jaccard.$(1).pdf \
-		--worst-tsv runs/$(1)_summary/worst_penalty_runs.gsea_jaccard.$(1).tsv \
-		--clone $(1) \
-		--overlap-col gsea_uniqueness \
-		--overlap-label "GSEA uniqueness (1 - mean Jaccard)" \
-		--overlap-higher-is-better
-
-runs/$(1)_summary/worst_penalty_runs.gsea_jaccard.$(1).tsv runs/$(1)_summary/penalty_selection.gsea_jaccard.$(1).pdf: runs/$(1)_summary/selected_penalty_runs.gsea_jaccard.$(1).tsv
-	@test -e $$@ || { echo "ERROR: expected output missing: $$@" >&2; exit 1; }
-
-runs/$(1)_summary/selected_penalty_runs.top_genes_jaccard.$(1).tsv: runs/$(1)_summary/summary.top_genes_jaccard.$(1).tsv summarize_penalty_selection.py
-	$(PYTHON) summarize_penalty_selection.py $$< runs/$(1)_summary/selected_penalty_runs.top_genes_jaccard.$(1).tsv runs/$(1)_summary/penalty_selection.top_genes_jaccard.$(1).pdf \
-		--worst-tsv runs/$(1)_summary/worst_penalty_runs.top_genes_jaccard.$(1).tsv \
-		--clone $(1) \
-		--overlap-col top_gene_mean_pairwise_jaccard \
-		--overlap-label "mean pairwise Jaccard of top up/down genes"
-
-runs/$(1)_summary/worst_penalty_runs.top_genes_jaccard.$(1).tsv runs/$(1)_summary/penalty_selection.top_genes_jaccard.$(1).pdf: runs/$(1)_summary/selected_penalty_runs.top_genes_jaccard.$(1).tsv
-	@test -e $$@ || { echo "ERROR: expected output missing: $$@" >&2; exit 1; }
+runs/$(1)_summary/gsea_heatmap.$(1).pdf: $(RUN_GSEAS) plot_gsea_heatmap.py
+	mkdir -p runs/$(1)_summary
+	$(PYTHON) plot_gsea_heatmap.py runs $$@ --clone $(1) --padj-cutoff $(GSEA_HEATMAP_PADJ_CUTOFF)
 endef
 
 $(foreach clone,$(CLONES),$(eval $(call SUMMARY_TEMPLATE,$(clone))))
 
 clean-metrics:
-	rm -f $(L_CORR_SUMMARY_TSVS) $(GSEA_SUMMARY_TSVS) $(TOP_GENE_SUMMARY_TSVS) $(RUNTIME_SUMMARY_TSVS) $(RUN_METRICS) $(OLD_SUMMARY_OUTPUTS) $(OLD_CLONE_OUTPUTS)
+	rm -f $(SELECTION_SUMMARY_TSVS) $(RUN_METRICS) runs/*_summary/*.tsv
 
 clean-plots:
-	rm -f $(L_CORR_PLOT_PDFS) $(GSEA_PLOT_PDFS) $(TOP_GENE_PLOT_PDFS) $(RUNTIME_PDFS) $(PENALTY_SELECTION_TSVS) $(PENALTY_WORST_TSVS) $(PENALTY_SELECTION_PDFS) $(PENALTY_GSEA_SELECTION_TSVS) $(PENALTY_GSEA_WORST_TSVS) $(PENALTY_GSEA_SELECTION_PDFS) $(PENALTY_TOP_GENE_SELECTION_TSVS) $(PENALTY_TOP_GENE_WORST_TSVS) $(PENALTY_TOP_GENE_SELECTION_PDFS) $(RUN_LOG_PDFS) $(RUN_FACTOR_HEATMAPS) $(RUN_FLOWTREES) $(RUN_FLOW_DISTANCES) $(OLD_PLOT_OUTPUTS) $(OLD_CLONE_OUTPUTS)
+	rm -f $(PENALTY_HEATMAP_PDFS) $(RUN_LOG_PDFS) $(RUN_FACTOR_HEATMAPS) $(RUN_FLOWTREES) $(RUN_FLOW_DISTANCES) runs/*_summary/*.pdf
 
 clean:
-	rm -rf runs $(L_CORR_SUMMARY_TSVS) $(GSEA_SUMMARY_TSVS) $(TOP_GENE_SUMMARY_TSVS) $(RUNTIME_SUMMARY_TSVS) $(L_CORR_PLOT_PDFS) $(GSEA_PLOT_PDFS) $(TOP_GENE_PLOT_PDFS) $(RUNTIME_PDFS) $(PENALTY_SELECTION_TSVS) $(PENALTY_WORST_TSVS) $(PENALTY_SELECTION_PDFS) $(PENALTY_GSEA_SELECTION_TSVS) $(PENALTY_GSEA_WORST_TSVS) $(PENALTY_GSEA_SELECTION_PDFS) $(PENALTY_TOP_GENE_SELECTION_TSVS) $(PENALTY_TOP_GENE_WORST_TSVS) $(PENALTY_TOP_GENE_SELECTION_PDFS) $(RUN_LOG_PDFS) $(RUN_FACTOR_HEATMAPS) $(RUN_FLOWTREES) $(RUN_FLOW_DISTANCES) $(OLD_SUMMARY_OUTPUTS) $(OLD_PLOT_OUTPUTS) $(OLD_CLONE_OUTPUTS)
+	rm -rf runs

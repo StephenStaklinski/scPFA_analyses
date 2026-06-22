@@ -15,7 +15,6 @@ CASSIOPEIA_SIF := ${CONTAINERS}/cassiopeia/cassiopeia.sif
 SRC := ${BENCHMARKS_DIR}/src
 GEX_LINEAGE_DIR := $(MAIN_DIR)/gex_lineage
 
-
 SIM_IDS := $(shell seq 1 $(NSAMP))
 TREES := $(shell seq -f sim.%.0f.tree.nex 1 $(NSAMP))
 SIMS := $(shell seq -f sim.%.0f.sim.summary.tsv 1 $(NSAMP))
@@ -56,12 +55,14 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--outprefix sim.$*.sim \
 		--tree-total-time $(TOTAL_TIME) \
 		--n-genes ${NGENES} \
-		--L-l2-norm ${DESIRED_L_ROW_NORMS} \
+		--sigma2 20.0,10.0,5.0,2.0,1.0 \
 		--dim ${K} \
 		--sigma2-obs $(SIGMA2_OBS) \
 		--include-factorization > sim.$*.sim.term
 
 # Fit the model to the simulated data
+# 		--scale-invar-constraint none \
+# 		--no-post-hoc-identifiability
 sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
 	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--seed $$(shuf -i 1-1000000000 -n 1) \
