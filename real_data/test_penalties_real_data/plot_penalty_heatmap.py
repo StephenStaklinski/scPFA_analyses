@@ -39,6 +39,11 @@ def parse_args():
     parser.add_argument("summary_tsv")
     parser.add_argument("output_pdf")
     parser.add_argument("--clone", default=None)
+    parser.add_argument(
+        "--no-annot",
+        action="store_true",
+        help="Do not print metric values inside heatmap cells.",
+    )
     return parser.parse_args()
 
 
@@ -55,6 +60,7 @@ def metric_heatmap(
     cmap,
     fmt=".3f",
     aggfunc="mean",
+    annot=True,
 ):
     pivot = df.pivot_table(
         index="L_loading_overlap_strength",
@@ -68,7 +74,7 @@ def metric_heatmap(
         pivot,
         ax=ax,
         cmap=cmap,
-        annot=True,
+        annot=annot,
         annot_kws={"fontsize": 11},
         fmt=fmt,
         linewidths=0.6,
@@ -142,6 +148,7 @@ def main():
         "mean_offdiag_abs_L_pearson",
         "Mean pairwise |Pearson r|\nbetween L rows",
         cmap,
+        annot=not args.no_annot,
     )
     metric_heatmap(
         heat_axes[0, 1],
@@ -149,6 +156,7 @@ def main():
         "top_gene_mean_pairwise_signed_jaccard",
         "Mean pairwise signed Jaccard\ntop-gene overlap",
         cmap,
+        annot=not args.no_annot,
     )
     metric_heatmap(
         heat_axes[0, 2],
@@ -157,6 +165,7 @@ def main():
         "Best-state\ncombined log likelihood",
         cmap.reversed(),
         fmt=".0f",
+        annot=not args.no_annot,
     )
 
     metric_heatmap(
@@ -165,6 +174,7 @@ def main():
         "max_offdiag_abs_L_pearson",
         "Max pairwise |Pearson r|\nbetween L rows",
         cmap,
+        annot=not args.no_annot,
     )
     metric_heatmap(
         heat_axes[1, 1],
@@ -172,6 +182,7 @@ def main():
         "top_gene_max_pairwise_signed_jaccard",
         "Max pairwise signed Jaccard\ntop-gene overlap",
         cmap,
+        annot=not args.no_annot,
     )
     heat_axes[1, 2].set_visible(False)
 

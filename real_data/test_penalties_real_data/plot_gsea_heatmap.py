@@ -50,6 +50,11 @@ def parse_args():
     parser.add_argument("output_pdf")
     parser.add_argument("--clone", required=True)
     parser.add_argument("--padj-cutoff", type=float, default=0.05)
+    parser.add_argument(
+        "--no-annot",
+        action="store_true",
+        help="Do not print metric values inside heatmap cells.",
+    )
     return parser.parse_args()
 
 
@@ -143,7 +148,18 @@ def make_pivot(df, rm_value, value_col):
     return pivot.reindex(sorted(pivot.columns), axis=1)
 
 
-def draw_heatmap(ax, pivot, cmap, vmin, vmax, fmt, cbar_label, title=None, nan_label="—"):
+def draw_heatmap(
+    ax,
+    pivot,
+    cmap,
+    vmin,
+    vmax,
+    fmt,
+    cbar_label,
+    title=None,
+    nan_label="—",
+    show_annotations=True,
+):
     # Build a string annotation array to label NaN cells cleanly
     annot = pivot.copy().astype(object)
     for r in annot.index:
@@ -164,7 +180,7 @@ def draw_heatmap(ax, pivot, cmap, vmin, vmax, fmt, cbar_label, title=None, nan_l
         cmap=cmap_obj,
         vmin=vmin,
         vmax=vmax,
-        annot=annot,
+        annot=annot if show_annotations else False,
         annot_kws={"fontsize": 10},
         fmt="",
         linewidths=0.6,
@@ -234,6 +250,7 @@ def main():
             fmt=".0f",
             cbar_label=f"Factors with\nsignificant GO term (of {n_factors_total})",
             title=title,
+            show_annotations=not args.no_annot,
         )
 
         pivot_j = make_pivot(df, rm, "mean_pairwise_gsea_jaccard")
@@ -246,6 +263,7 @@ def main():
             fmt=".2f",
             cbar_label="Mean pairwise Jaccard\nsignificant GO terms",
             title=None,
+            show_annotations=not args.no_annot,
         )
 
     # Row labels on the left of the figure

@@ -28,18 +28,17 @@ ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTPREFIX}.gex.tsv
 		--trees ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex \
 		--expr subset_${OUTPREFIX}.gex.tsv \
 		--outprefix ${OUTPREFIX} \
+		--dim 5 \
 		--seed 1 \
-		--verbose-log \
-		--varimax \
 		--nthreads 1 \
 		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term
 
 # Compare the final objective value
 diff-objective.txt: ${OUTPREFIX}.log ${PREV_OUTPREFIX}.log 
-	prev_obj=$$(tail -n 1 ${PREV_OUTPREFIX}.log | cut -f4); \
-	obj=$$(tail -n 1 ${OUTPREFIX}.log | cut -f4); \
-	echo -e "current_objective\tprevious_objective\trelative_diff" > $@; \
-	echo -e "$$obj\t$$prev_obj\t$$(echo "scale=6; ($$obj - $$prev_obj) / $$prev_obj" | bc)" >> $@
+	prev_obj=$$(awk -F '\t' '$$1 == "# best_state" { obj = $$3 } END { print obj }' ${PREV_OUTPREFIX}.log); \
+	obj=$$(awk -F '\t' '$$1 == "# best_state" { obj = $$3 } END { print obj }' ${OUTPREFIX}.log); \
+	printf "current_objective\tprevious_objective\trelative_diff\n" > $@; \
+	awk -v obj="$$obj" -v prev_obj="$$prev_obj" 'BEGIN { rel = (obj - prev_obj) / prev_obj; if (rel == 0) rel = 0; printf "%.17g\t%.17g\t%.6g\n", obj, prev_obj, rel }' >> $@
 
 # Compare runtime
 diff-runtime.txt: ${OUTPREFIX}.time ${PREV_OUTPREFIX}.time

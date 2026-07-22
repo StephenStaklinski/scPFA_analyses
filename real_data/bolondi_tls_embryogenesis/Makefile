@@ -1,5 +1,6 @@
 export SHELL=/usr/bin/bash
 
+.NOTINTERMEDIATE:
 .SECONDARY:
 .PRECIOUS:
 
@@ -21,6 +22,16 @@ TLS1_PATH := $(DATA_DIR)/GSM6831757_TracerTLS1
 TLS2_PATH := $(DATA_DIR)/GSM6831759_TracerTLS2
 TLSMULTI_PATH := $(DATA_DIR)/GSM6831760_TracerTLSMulti
 
+TLSSAMPLES := tls1 tls2
+
+# Dimension sweep settings
+DIM_VALUES ?= 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 25 30 40 50
+
+DIM_FIT_LOGS      = $(foreach dim,$(DIM_VALUES),$(1).K$(dim).fit.log)
+DIM_FIT_SUMMARIES = $(foreach dim,$(DIM_VALUES),$(1).K$(dim).fit.summary.tsv)
+DIM_FIT_GSEAS     = $(foreach dim,$(DIM_VALUES),$(1).K$(dim).fit.L.gsea.tsv)
+DIM_FIT_TIMES     = $(foreach dim,$(DIM_VALUES),$(1).K$(dim).fit.time)
+
 CHARMATRICES := tls1_character_matrix.tsv tls2_character_matrix.tsv
 GEXMATS := tls1_gex.tsv tls2_gex.tsv
 VINETREES := tls1.vine.nex tls2.vine.nex
@@ -34,8 +45,9 @@ GEXLINEAGEGSEA := tls1.fit.L.gsea.tsv tls2.fit.L.gsea.tsv
 FACTORHEATMAPS := tls1.fit.L.factor_heatmap.pdf tls2.fit.L.factor_heatmap.pdf
 FLOWTREES := tls1.fit.latent_flow.factor_trees.pdf tls2.fit.latent_flow.factor_trees.pdf
 EUCLIDEANPSEUDOTIME := tls1.fit.latent_flow.euclidean_factor_pseudotime.pdf tls2.fit.latent_flow.euclidean_factor_pseudotime.pdf
+DIMSUMMARYPLOTS := $(TLSSAMPLES:%=%.dim_summary.pdf)
 
-all: prep_data run_vine gexlineage plotting
+all: prep_data run_vine gexlineage plotting dim_plots
 
 prep_data: $(CHARMATRICES) $(GEXMATS) $(ORIGEMBEDDINGS)
 palantir: $(PALANTIRTRAJECTORIES)
@@ -43,6 +55,7 @@ monocle: $(MONOCLETRAJECTORIES)
 run_vine: $(VINETREES)
 gexlineage: $(GEXLINEAGERESULTS)
 plotting: $(LOGPLOTS) $(PANELPLOTS) $(GEXLINEAGEGSEA) $(FACTORHEATMAPS) $(FLOWTREES) $(EUCLIDEANPSEUDOTIME)
+dim_plots: $(DIMSUMMARYPLOTS)
 
 # Obtain the TLS1 character matrix
 tls1_character_matrix.tsv tls1_mutation_dict.tsv: $(TLS1_PATH)/allele_table.txt
@@ -106,12 +119,8 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 	--dim 5 \
 	--L-l1-strength 0.1 \
 	--L-loading-overlap-strength 1 \
-	--normalize-regularization-scale \
-	--remove-ribo-mito-genes \
 	--tree-index 1 \
-	--max-iter 100000 \
 	--nthreads 1 \
-	--verbose-log \
 	--seed 1 > $*.fit.term
 
 # Plot the fit optimization log results
@@ -155,6 +164,58 @@ tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/fea
 			/mnt/cwd/$*_gex.umap.tsv \
 			/mnt/cwd/$*.fit.latent_flow.total_euclidean_distance.tsv \
 			/mnt/cwd/$*.fit.latent_flow
+
+# Dimension-sweep fits — explicit per-sample rules so they don't conflict
+# with the generic %.fit.summary.tsv rule above (shorter stem wins in Make)
+tls1.K%.fit.summary.tsv: tls1.vine.nex tls1_gex.tsv
+	/usr/bin/time -o tls1.K$*.fit.time ${GEXLINEAGE} \
+	--trees tls1.vine.nex \
+	--expr tls1_gex.tsv \
+	--tree-total-time 1.0 \
+	--outprefix tls1.K$*.fit \
+	--filter-test moran \
+	--dim $* \
+	--L-l1-strength 0.1 \
+	--L-loading-overlap-strength 1 \
+	--tree-index 1 \
+	--nthreads 1 \
+	--seed 1 > tls1.K$*.fit.term
+
+tls2.K%.fit.summary.tsv: tls2.vine.nex tls2_gex.tsv
+	/usr/bin/time -o tls2.K$*.fit.time ${GEXLINEAGE} \
+	--trees tls2.vine.nex \
+	--expr tls2_gex.tsv \
+	--tree-total-time 1.0 \
+	--outprefix tls2.K$*.fit \
+	--filter-test moran \
+	--dim $* \
+	--L-l1-strength 0.1 \
+	--L-loading-overlap-strength 1 \
+	--tree-index 1 \
+	--nthreads 1 \
+	--seed 1 > tls2.K$*.fit.term
+
+tls1.K%.fit.F.tsv tls1.K%.fit.L.tsv tls1.K%.fit.X.tsv tls1.K%.fit.log tls1.K%.fit.latent_flow.tsv tls1.K%.fit.time: tls1.K%.fit.summary.tsv
+	@test -e $@ || { echo "ERROR: expected output missing after gexLineage run: $@" >&2; exit 1; }
+
+tls2.K%.fit.F.tsv tls2.K%.fit.L.tsv tls2.K%.fit.X.tsv tls2.K%.fit.log tls2.K%.fit.latent_flow.tsv tls2.K%.fit.time: tls2.K%.fit.summary.tsv
+	@test -e $@ || { echo "ERROR: expected output missing after gexLineage run: $@" >&2; exit 1; }
+
+# Dimensionality-sweep summary plots (one combined PDF per sample).
+# The plotter reads the fit logs, but those logs are written before the
+# summary files during a fit.  Do not make them normal prerequisites here, or
+# Make will repeatedly consider them stale relative to their matching summary.
+tls1.dim_summary.pdf: $(call DIM_FIT_SUMMARIES,tls1) $(call DIM_FIT_GSEAS,tls1) $(call DIM_FIT_TIMES,tls1) $(SRC)/plot_dim_log_likelihood.py
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_dim_log_likelihood.py \
+			/mnt/cwd/tls1.dim_summary.pdf \
+			$(foreach dim,$(DIM_VALUES),/mnt/cwd/tls1.K$(dim).fit.log)
+
+tls2.dim_summary.pdf: $(call DIM_FIT_SUMMARIES,tls2) $(call DIM_FIT_GSEAS,tls2) $(call DIM_FIT_TIMES,tls2) $(SRC)/plot_dim_log_likelihood.py
+	singularity exec --bind $(SRC):/mnt/src/ --bind $(CURR_DIR):/mnt/cwd/ $(PYPLOTTING_SIF) \
+		python /mnt/src/plot_dim_log_likelihood.py \
+			/mnt/cwd/tls2.dim_summary.pdf \
+			$(foreach dim,$(DIM_VALUES),/mnt/cwd/tls2.K$(dim).fit.log)
 
 clean-gexlineage:
 	rm -f *.fit.*

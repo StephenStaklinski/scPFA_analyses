@@ -458,6 +458,14 @@ def plot_interpolated_vector_field(xcol, ycol, prefix):
     v = y1 - y0
 
     xmin, xmax, ymin, ymax = get_plot_limits(xcol, ycol)
+    if not (np.isfinite([xmin, xmax, ymin, ymax]).all() and xmax > xmin and ymax > ymin):
+        print(
+            f"WARNING: skipping {prefix} vector-field plot because "
+            f"{xcol}/{ycol} do not span a nondegenerate 2D grid.",
+            file=sys.stderr,
+        )
+        return
+
     gx = np.linspace(xmin, xmax, VECTOR_GRID_N)
     gy = np.linspace(ymin, ymax, VECTOR_GRID_N)
     GX, GY = np.meshgrid(gx, gy)

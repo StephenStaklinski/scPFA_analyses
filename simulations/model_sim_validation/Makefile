@@ -118,3 +118,11 @@ archive-all:
 			shopt -u nullglob; \
 		fi; \
 	done
+
+clean-all:
+	rm -f $(MAIN_DIR)/diff.txt $(MAIN_DIR)/diff.pdf $(MAIN_DIR)/eval.all.fit.summaries.tsv $(MAIN_DIR)/eval.all.time.txt $(MAIN_DIR)/summaries.pdf $(MAIN_DIR)/times.pdf
+	for dir in $(MAIN_DIR)/*taxa*genes; do \
+		if [[ -d $$dir ]]; then \
+			make -C $$dir clean; \
+		fi; \
+	done

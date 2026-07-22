@@ -52,15 +52,33 @@ fit_X = fit_X_df.to_numpy()
 
 fit_cell_colors = np.arange(fit_F.shape[0])
 
+
+def two_dim_pca(matrix):
+    n_components = min(2, matrix.shape[0], matrix.shape[1])
+    if n_components <= 0:
+        return np.zeros((matrix.shape[0], 2))
+    coords = PCA(n_components=n_components).fit_transform(matrix)
+    if coords.shape[1] == 1:
+        coords = np.column_stack([coords[:, 0], np.zeros(coords.shape[0])])
+    return coords
+
+
+def two_dim_umap(matrix):
+    if matrix.shape[1] < 2:
+        centered = matrix[:, 0] - np.mean(matrix[:, 0])
+        return np.column_stack([centered, np.zeros(matrix.shape[0])])
+    return umap.UMAP(n_components=2, random_state=42).fit_transform(matrix)
+
+
 # PCA
-fit_F_pca = PCA(n_components=2).fit_transform(fit_F)
-fit_Z_pca = PCA(n_components=2).fit_transform(fit_Z)
-fit_X_pca = PCA(n_components=2).fit_transform(fit_X)
+fit_F_pca = two_dim_pca(fit_F)
+fit_Z_pca = two_dim_pca(fit_Z)
+fit_X_pca = two_dim_pca(fit_X)
 
 # UMAP
-fit_F_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_F)
-fit_Z_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_Z)
-fit_X_umap = umap.UMAP(n_components=2, random_state=42).fit_transform(fit_X)
+fit_F_umap = two_dim_umap(fit_F)
+fit_Z_umap = two_dim_umap(fit_Z)
+fit_X_umap = two_dim_umap(fit_X)
 
 fig, axes = plt.subplots(1, 10, figsize=(40, 4))
 

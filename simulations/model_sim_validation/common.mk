@@ -61,8 +61,6 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--include-factorization > sim.$*.sim.term
 
 # Fit the model to the simulated data
-# 		--scale-invar-constraint none \
-# 		--no-post-hoc-identifiability
 sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
 	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
 		--seed $$(shuf -i 1-1000000000 -n 1) \
@@ -70,8 +68,9 @@ sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.t
 		--expr sim.$*.sim.X.tsv \
 		--outprefix sim.$*.fit \
 		--dim ${K} \
+		--no-post-hoc-identifiability \
+		--no-scale-constraint \
 		--no-filter \
-		--verbose-log \
 		--no-preprocess > sim.$*.fit.term
 
 # Plot the fit optimization log results
