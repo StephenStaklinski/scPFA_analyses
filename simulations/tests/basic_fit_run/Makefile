@@ -1,15 +1,14 @@
 export SHELL=/usr/bin/bash
 
 GEX_LINEAGE_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage
-INPUT_DATA_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/data
+INPUT_DATA_DIR := ../data
 
 PREV_OUTPREFIX := ./prev_run/quinn.90
 
 # Selected the smallest CP with perfectly matching tree and expr matrix cell names
 OUTPREFIX := quinn.90
-
-# Quinn mouse 5k experiment time
-TREE_RESCALE_TOTAL_TIME := 54
+FILTER_PREFIX := ${OUTPREFIX}.filter
+FILTERED_GEX := ${FILTER_PREFIX}.filtered.tsv
 
 all: run compare
 run: ${OUTPREFIX}.log
@@ -19,19 +18,27 @@ compare: diff-objective.txt diff-runtime.txt
 subset_${OUTPREFIX}.gex.tsv: ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.gex.tsv
 	cut -f1-21 $< > $@
 
-# Main run on the example dataset
-${OUTPREFIX}.term ${OUTPREFIX}.time ${OUTPREFIX}.log ${OUTPREFIX}.summary.tsv \
-${OUTPREFIX}.Z.tsv ${OUTPREFIX}.L.tsv: \
-${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTPREFIX}.gex.tsv
-	/usr/bin/time -o ${OUTPREFIX}.time \
-		${GEX_LINEAGE_DIR}/bin/gexLineage \
-		--trees ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex \
+# Filter genes once into the modeling-ready matrix consumed by gexFactor.
+${FILTERED_GEX}: ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTPREFIX}.gex.tsv
+	/usr/bin/time -o ${FILTER_PREFIX}.time \
+		${GEX_LINEAGE_DIR}/bin/gexFilter \
+		--trees $< \
 		--expr subset_${OUTPREFIX}.gex.tsv \
+		--outprefix ${FILTER_PREFIX} \
+		--filter-test lrt-lambda \
+		--seed 1 > ${FILTER_PREFIX}.term
+
+# Fit the factor model to the filtered matrix.
+${OUTPREFIX}.term ${OUTPREFIX}.time ${OUTPREFIX}.log ${OUTPREFIX}.summary.tsv \
+${OUTPREFIX}.X.tsv ${OUTPREFIX}.F.tsv ${OUTPREFIX}.L.tsv: \
+${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${FILTERED_GEX}
+	/usr/bin/time -o ${OUTPREFIX}.time \
+		${GEX_LINEAGE_DIR}/bin/gexFactor \
+		--trees ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex \
+		--expr ${FILTERED_GEX} \
 		--outprefix ${OUTPREFIX} \
 		--dim 5 \
-		--seed 1 \
-		--nthreads 1 \
-		--tree-total-time ${TREE_RESCALE_TOTAL_TIME} > ${OUTPREFIX}.term
+		--seed 1 > ${OUTPREFIX}.term
 
 # Compare the final objective value
 diff-objective.txt: ${OUTPREFIX}.log ${PREV_OUTPREFIX}.log 

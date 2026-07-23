@@ -89,66 +89,56 @@ tree.%.true.neg.expr.tsv: tree.%.true.nex
 
 # Run the Pagel's lambda LRT phylo signal filter on pos sims
 tree.%.pos.correlation.lrt.lambda.tsv tree.%.pos.correlation.lrt.lambda.time: tree.%.true.nex tree.%.true.pos.expr.tsv
-	/usr/bin/time -o tree.$*.pos.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o tree.$*.pos.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexFilter \
 		--trees tree.$*.true.nex \
 		--expr tree.$*.true.pos.expr.tsv \
 		--outprefix tree.$*.pos \
-		--filter-test lrt \
-		--lrt-alt lambda \
-		--filter-only \
+		--filter-test lrt-lambda \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run the Pagel's lambda LRT phylo signal filter on neg sims
 tree.%.neg.correlation.lrt.lambda.tsv tree.%.neg.correlation.lrt.lambda.time: tree.%.true.nex tree.%.true.neg.expr.tsv
-	/usr/bin/time -o tree.$*.neg.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o tree.$*.neg.correlation.lrt.lambda.time ${GEX_LINEAGE_DIR}/bin/gexFilter \
 		--trees tree.$*.true.nex \
 		--expr tree.$*.true.neg.expr.tsv \
 		--outprefix tree.$*.neg \
-		--filter-test lrt \
-		--lrt-alt lambda \
-		--filter-only \
+		--filter-test lrt-lambda \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run the full LRT phylo signal filter on pos sims
 tree.%.pos.correlation.lrt.full.tsv tree.%.pos.correlation.lrt.full.time: tree.%.true.nex tree.%.true.pos.expr.tsv
-	/usr/bin/time -o tree.$*.pos.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o tree.$*.pos.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexFilter \
 		--trees tree.$*.true.nex \
 		--expr tree.$*.true.pos.expr.tsv \
 		--outprefix tree.$*.pos \
-		--filter-test lrt \
-		--lrt-alt full \
-		--filter-only \
+		--filter-test lrt-full \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run the full LRT phylo signal filter on neg sims
 tree.%.neg.correlation.lrt.full.tsv tree.%.neg.correlation.lrt.full.time: tree.%.true.nex tree.%.true.neg.expr.tsv
-	/usr/bin/time -o tree.$*.neg.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o tree.$*.neg.correlation.lrt.full.time ${GEX_LINEAGE_DIR}/bin/gexFilter \
 		--trees tree.$*.true.nex \
 		--expr tree.$*.true.neg.expr.tsv \
 		--outprefix tree.$*.neg \
-		--filter-test lrt \
-		--lrt-alt full \
-		--filter-only \
+		--filter-test lrt-full \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter on pos sims
 tree.%.pos.correlation.moran.tsv tree.%.pos.correlation.moran.time: tree.%.true.nex tree.%.true.pos.expr.tsv
-	/usr/bin/time -o tree.$*.pos.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o tree.$*.pos.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexFilter \
 		--trees tree.$*.true.nex \
 		--expr tree.$*.true.pos.expr.tsv \
 		--outprefix tree.$*.pos \
 		--filter-test moran \
-		--filter-only \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter on neg sims
 tree.%.neg.correlation.moran.tsv tree.%.neg.correlation.moran.time: tree.%.true.nex tree.%.true.neg.expr.tsv
-	/usr/bin/time -o tree.$*.neg.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o tree.$*.neg.correlation.moran.time ${GEX_LINEAGE_DIR}/bin/gexFilter \
 		--trees tree.$*.true.nex \
 		--expr tree.$*.true.neg.expr.tsv \
 		--outprefix tree.$*.neg \
 		--filter-test moran \
-		--filter-only \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run PATH's implementation of the autocorrelation phylo signal filter on pos sims
@@ -229,4 +219,3 @@ archive-all:
 	mkdir -p $$archive_dir ; \
 	mv tree.* $$archive_dir/ ; \
 	mv eval.all* $$archive_dir/
-

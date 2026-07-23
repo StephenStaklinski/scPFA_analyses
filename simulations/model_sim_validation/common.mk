@@ -60,18 +60,18 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--sigma2-obs $(SIGMA2_OBS) \
 		--include-factorization > sim.$*.sim.term
 
-# Fit the model to the simulated data
+# Fit the model directly to the modeling-ready simulated data. This benchmark
+# intentionally bypasses gexFilter so every simulated gene remains available
+# for the matched simulation-versus-fit evaluation.
 sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
-	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexLineage \
+	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexFactor \
 		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees sim.$*.tree.nex \
 		--expr sim.$*.sim.X.tsv \
 		--outprefix sim.$*.fit \
 		--dim ${K} \
 		--no-post-hoc-identifiability \
-		--no-scale-constraint \
-		--no-filter \
-		--no-preprocess > sim.$*.fit.term
+		--no-scale-constraint > sim.$*.fit.term
 
 # Plot the fit optimization log results
 sim.%.fit.log.pdf: sim.%.fit.log
