@@ -9,9 +9,10 @@ CONTAINERS := $(BENCHMARKS_DIR)/containers
 PYPLOTTING_SIF := $(CONTAINERS)/pyplotting/pyplotting.sif
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
 GEX_LINEAGE_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage
-GEXLINEAGE := $(GEX_LINEAGE_DIR)/bin/gexLineage
-BOLONDI_DIR := $(BENCHMARKS_DIR)/bolondi_tls_embryogenesis
-QUINN_DIR := $(BENCHMARKS_DIR)/quinn_lung_cancer
+GEXFILTER := $(GEX_LINEAGE_DIR)/bin/gexFilter
+GEXFACTOR := $(GEX_LINEAGE_DIR)/bin/gexFactor
+BOLONDI_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/preprocessed_data
+QUINN_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/preprocessed_data
 PYTHON ?= /home/staklins/miniforge3/envs/pyplotting/bin/python
 
 # CLONES can include TLS clones, such as tls1/tls2, and Quinn shorthand clones,
@@ -34,16 +35,13 @@ RIBO_MITO_VALUES ?= 0
 
 TREE_MODES ?= one
 TREE_INDEX ?= 1
-TREE_TOTAL_TIME ?= 1.0
 DIM ?= 5
 DIM_VALUES ?= $(DIM)
-NTHREADS ?= 1
 SEED ?= 1
+FILTER_TEST ?= moran
 
-BASE_GEXLINEAGE_OPTS := \
-	--tree-total-time $(TREE_TOTAL_TIME) \
-	--filter-test moran \
-	--nthreads $(NTHREADS) \
+BASE_FILTER_OPTS := \
+	--filter-test $(FILTER_TEST) \
 	--seed $(SEED)
 
 define IS_QUINN_CLONE
@@ -67,11 +65,7 @@ $(if $(filter one,$(1)),one$(TREE_INDEX),$(1))
 endef
 
 define RUN_TREE_INPUT
-$(call TREE_INPUT,$(1))
-endef
-
-define TREE_MODE_OPTS
-$(if $(filter one,$(1)),--tree-index $(TREE_INDEX),)
+$(if $(filter one,$(2)),runs/tree_inputs/$(1).one$(TREE_INDEX).nex,$(call TREE_INPUT,$(1)))
 endef
 
 define RIBO_MITO_OPTS
@@ -89,6 +83,16 @@ endef
 define CONDITION_OPTS
 --L-l1-strength $(1) \
 $(if $(filter-out 0 0.0 0.00 0.000,$(2)),--L-loading-overlap-strength $(2),)
+endef
+
+# Filtering is shared across factor-model parameter combinations. Include every
+# setting that can alter the filtered matrix in its prefix.
+define FILTER_NAME
+T$(call TREE_MODE_NAME,$(2))_Rm$(3)_Ft$(subst -,_,$(FILTER_TEST))_S$(SEED)_C$(DOWNSAMPLE_CELLS_LABEL)_G$(DOWNSAMPLE_GENES_LABEL)
+endef
+
+define FILTER_PREFIX
+runs/filtered/$(1).$(call FILTER_NAME,$(1),$(2),$(3))
 endef
 
 CONDITIONS := $(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(foreach k,$(DIM_VALUES),$(foreach ll1,$(L_L1_STRENGTHS),$(foreach lo,$(L_LOADING_OVERLAP_STRENGTHS),$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(tm)),$(rm),$(k),$(ll1),$(lo)))))))
@@ -137,14 +141,16 @@ print-config:
 	@echo "DIM_VALUES=$(DIM_VALUES)"
 	@echo "DOWNSAMPLE_CELLS=$(DOWNSAMPLE_CELLS)"
 	@echo "DOWNSAMPLE_GENES=$(DOWNSAMPLE_GENES)"
+	@echo "FILTER_TEST=$(FILTER_TEST)"
 	@echo "SELECTION_TOP_N=$(SELECTION_TOP_N)"
 	@echo "GSEA_PADJ_CUTOFF=$(GSEA_PADJ_CUTOFF)"
 	@echo "GSEA_TOP_N=$(GSEA_TOP_N)"
-	@echo "GEXLINEAGE=$(GEXLINEAGE)"
+	@echo "GEXFILTER=$(GEXFILTER)"
+	@echo "GEXFACTOR=$(GEXFACTOR)"
 	@echo "BOLONDI_DIR=$(BOLONDI_DIR)"
 	@echo "QUINN_DIR=$(QUINN_DIR)"
 	@echo "PYPLOTTING_SIF=$(PYPLOTTING_SIF)"
-	@echo "BASE_GEXLINEAGE_OPTS=$(BASE_GEXLINEAGE_OPTS)"
+	@echo "BASE_FILTER_OPTS=$(BASE_FILTER_OPTS)"
 
 define GEX_INPUT_TEMPLATE
 runs/gex_inputs/$(1).cells$(DOWNSAMPLE_CELLS_LABEL).genes$(DOWNSAMPLE_GENES_LABEL).tsv: $(call RAW_GEX_INPUT,$(1))
@@ -175,18 +181,51 @@ endef
 
 $(foreach clone,$(CLONES),$(eval $(call GEX_INPUT_TEMPLATE,$(clone))))
 
-define RUN_TEMPLATE
-runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).summary.tsv: \
+define ONE_TREE_INPUT_TEMPLATE
+runs/tree_inputs/$(1).one$(TREE_INDEX).nex: $(call TREE_INPUT,$(1))
+	mkdir -p runs/tree_inputs
+	awk -v tree_index="$(TREE_INDEX)" '\
+		BEGIN { tree_count = 0; found = 0; } \
+		/^[[:space:]]*[Tt][Rr][Ee][Ee][[:space:]]/ { \
+			tree_count++; \
+			if (tree_count == tree_index) { print; found = 1; } \
+			next; \
+		} \
+		{ print; } \
+		END { \
+			if (!found) { \
+				printf "TREE_INDEX %d was not found in %s\n", tree_index, FILENAME > "/dev/stderr"; \
+				exit 1; \
+			} \
+		}' $$< > $$@
+endef
+
+$(if $(filter one,$(TREE_MODES)),$(foreach clone,$(CLONES),$(eval $(call ONE_TREE_INPUT_TEMPLATE,$(clone)))))
+
+define FILTER_TEMPLATE
+$(call FILTER_PREFIX,$(1),$(2),$(3)).filtered.tsv: \
 $(call RUN_TREE_INPUT,$(1),$(2)) $(call GEX_INPUT,$(1))
-	mkdir -p runs/$(1)
-	/usr/bin/time -o runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).time $(GEXLINEAGE) \
+	mkdir -p runs/filtered
+	/usr/bin/time -o $(call FILTER_PREFIX,$(1),$(2),$(3)).time $(GEXFILTER) \
 		--trees $(call RUN_TREE_INPUT,$(1),$(2)) \
 		--expr $(call GEX_INPUT,$(1)) \
+		--outprefix $(call FILTER_PREFIX,$(1),$(2),$(3)) \
+		$(BASE_FILTER_OPTS) \
+		$(call RIBO_MITO_OPTS,$(3)) > $(call FILTER_PREFIX,$(1),$(2),$(3)).term
+endef
+
+$(foreach clone,$(CLONES),$(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(eval $(call FILTER_TEMPLATE,$(clone),$(tm),$(rm))))))
+
+define RUN_TEMPLATE
+runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).summary.tsv: \
+$(call RUN_TREE_INPUT,$(1),$(2)) $(call FILTER_PREFIX,$(1),$(2),$(3)).filtered.tsv
+	mkdir -p runs/$(1)
+	/usr/bin/time -o runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).time $(GEXFACTOR) \
+		--trees $(call RUN_TREE_INPUT,$(1),$(2)) \
+		--expr $(call FILTER_PREFIX,$(1),$(2),$(3)).filtered.tsv \
 		--outprefix runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)) \
-		$(BASE_GEXLINEAGE_OPTS) \
 		--dim $(4) \
-		$(call TREE_MODE_OPTS,$(2)) \
-		$(call RIBO_MITO_OPTS,$(3)) \
+		--seed $(SEED) \
 		$(call CONDITION_OPTS,$(5),$(6)) > runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).term
 
 runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).term \
@@ -199,7 +238,7 @@ runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6))
 runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).latent_flow.tsv \
 runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).L.pearson_correlation.tsv: \
 runs/$(1)/$(call CONDITION_NAME,$(call TREE_MODE_NAME,$(2)),$(3),$(4),$(5),$(6)).summary.tsv
-	@test -e $$@ || { echo "ERROR: expected output missing after gexLineage run: $$@" >&2; exit 1; }
+	@test -e $$@ || { echo "ERROR: expected output missing after gexFactor run: $$@" >&2; exit 1; }
 endef
 
 $(foreach clone,$(CLONES),$(foreach tm,$(TREE_MODES),$(foreach rm,$(RIBO_MITO_VALUES),$(foreach k,$(DIM_VALUES),$(foreach ll1,$(L_L1_STRENGTHS),$(foreach lo,$(L_LOADING_OVERLAP_STRENGTHS),$(eval $(call RUN_TEMPLATE,$(clone),$(tm),$(rm),$(k),$(ll1),$(lo)))))))))

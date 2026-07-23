@@ -10,13 +10,14 @@ CONTAINERS := $(BENCHMARKS_DIR)/containers
 PYPLOTTING_SIF := $(CONTAINERS)/pyplotting/pyplotting.sif
 SCANPY_SIF := $(CONTAINERS)/scanpy/scanpy.sif
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
-GEXLINEAGE := /home/staklins/projects/gex_lineage_project/gex_lineage/bin/gexLineage
+GEXFACTOR := /home/staklins/projects/gex_lineage_project/gex_lineage/bin/gexFactor
 
-CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/final
+CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/factor_final
 SHARED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/preprocessed_data
+FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_filter
 SAMPLES := tls1 tls2
 
-# Set on the command line after inspecting ../dim_sweep/*.dim_summary.pdf,
+# Set on the command line after inspecting ../factor_dim_sweep/*.dim_summary.pdf,
 # for example: make DIM=8
 DIM ?=
 ifeq ($(strip $(DIM)),)
@@ -42,12 +43,12 @@ all: fit plotting
 fit: $(FIT_SUMMARIES)
 plotting: $(ORIG_EMBEDDINGS) $(LOG_PLOTS) $(PANEL_PLOTS) $(GSEA) $(FACTOR_HEATMAPS) $(FLOW_TREES) $(EUCLIDEAN_PSEUDOTIME)
 
-%.fit.summary.tsv: $(SHARED_DIR)/%.vine.nex $(SHARED_DIR)/%_gex.tsv $(DIM_CHANGED)
-	/usr/bin/time -o $*.fit.time $(GEXLINEAGE) --trees $(SHARED_DIR)/$*.vine.nex --expr $(SHARED_DIR)/$*_gex.tsv --tree-total-time 1.0 --outprefix $*.fit --filter-test moran --dim $(DIM) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --tree-index 1 --nthreads 1 --seed 1 > $*.fit.term
+%.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv $(DIM_CHANGED)
+	/usr/bin/time -o $*.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/$*.tree.nex --expr $(FILTERED_DIR)/$*.moran.filtered.tsv --outprefix $*.fit --dim $(DIM) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*.fit.term
 	@printf '%s\n' '$(DIM)' > .chosen_dim
 
 %.fit.F.tsv %.fit.L.tsv %.fit.X.tsv %.fit.log %.fit.latent_flow.tsv: %.fit.summary.tsv
-	@test -e $@ || { echo "ERROR: expected output missing after gexLineage run: $@" >&2; exit 1; }
+	@test -e $@ || { echo "ERROR: expected output missing after gexFactor run: $@" >&2; exit 1; }
 
 %_gex.pca.pdf %_gex.umap.pdf %_gex.pca.tsv %_gex.umap.tsv: $(SHARED_DIR)/%_gex.tsv
 	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(SHARED_DIR):/mnt/shared $(SCANPY_SIF) python /mnt/src/scanpy_dim_reduction.py /mnt/shared/$*_gex.tsv /mnt/cwd/$*_gex
