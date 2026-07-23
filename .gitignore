@@ -1,6 +1,7 @@
 
 # Ignore datasets
 data
+raw_data
 
 # Ignore copies of previous analyses
 previous_analysis
