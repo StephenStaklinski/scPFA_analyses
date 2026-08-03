@@ -60,16 +60,25 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--sigma2-obs $(SIGMA2_OBS) \
 		--include-factorization > sim.$*.sim.term
 
+# Compute the maxPhyloPCA initialization once for each simulated dataset.
+sim.%.fit.pca.eigenvectors.tsv: sim.%.tree.nex sim.%.sim.X.tsv
+	${GEX_LINEAGE_DIR}/bin/gexPca \
+		--tree sim.$*.tree.nex \
+		--expr sim.$*.sim.X.tsv \
+		--outprefix sim.$*.fit \
+		--dim ${K} > sim.$*.fit.pca.term
+
 # Fit the model directly to the modeling-ready simulated data. This benchmark
 # intentionally bypasses gexFilter so every simulated gene remains available
 # for the matched simulation-versus-fit evaluation.
-sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
+sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv sim.%.fit.pca.eigenvectors.tsv
 	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexFactor \
 		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees sim.$*.tree.nex \
 		--expr sim.$*.sim.X.tsv \
 		--outprefix sim.$*.fit \
 		--dim ${K} \
+		--pca sim.$*.fit.pca.eigenvectors.tsv \
 		--no-post-hoc-identifiability \
 		--no-scale-constraint > sim.$*.fit.term
 

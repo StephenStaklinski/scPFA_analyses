@@ -1,0 +1,31 @@
+Bootstrap: docker
+From: python:3.11-slim
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+    export PYTHONUNBUFFERED=1
+    export MPLBACKEND=Agg
+    export MPLCONFIGDIR=/tmp/matplotlib
+    export NUMBA_CACHE_DIR=/tmp/numba-cache
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        g++ \
+        gfortran \
+        libopenblas-dev \
+        liblapack-dev \
+        && apt-get clean \
+        && rm -rf /var/lib/apt/lists/*
+
+    pip install --no-cache-dir --upgrade pip setuptools wheel
+    pip install --no-cache-dir hotspotsc ete3
+
+%test
+    mkdir -p /tmp/numba-cache /tmp/matplotlib
+    python -c "import hotspot, anndata, ete3; print('Hotspot', hotspot.__version__)"
+
+%runscript
+    exec python "$@"

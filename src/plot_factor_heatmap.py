@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import re
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -11,11 +12,41 @@ parser.add_argument("L_tsv", help="Factor loading matrix TSV: rows=factors, colu
 parser.add_argument("outfile", help="Output figure path")
 parser.add_argument("--top_n", type=int, default=5,
                     help="Top up/down genes per factor")
+parser.add_argument(
+    "--fit-summary",
+    help="Fit summary TSV used to retain only factors with active Brownian variance",
+)
+parser.add_argument(
+    "--active-variance-threshold",
+    type=float,
+    default=1e-5,
+    help="Minimum Brownian variance for an active factor (default: 1e-5)",
+)
 
 args = parser.parse_args()
 
 # Read loading matrix
 L = pd.read_csv(args.L_tsv, sep="\t", index_col=0)
+
+if args.fit_summary:
+    summary = pd.read_csv(args.fit_summary, sep="\t", index_col=0)
+    active_factors = []
+    for parameter, value in summary["value"].items():
+        match = re.fullmatch(r"sigma2_latent_LF([0-9]+)", parameter)
+        if match and float(value) > args.active_variance_threshold:
+            active_factors.append(f"factor_{int(match.group(1))}")
+    missing = [factor for factor in active_factors if factor not in L.index]
+    if missing:
+        raise ValueError(
+            f"Active factors from {args.fit_summary} are absent from {args.L_tsv}: "
+            + ", ".join(missing)
+        )
+    if not active_factors:
+        raise ValueError(
+            "No factors have Brownian variance above "
+            f"{args.active_variance_threshold:g}"
+        )
+    L = L.loc[active_factors]
 
 factors = list(L.index)
 

@@ -17,14 +17,39 @@ args <- commandArgs(trailingOnly = TRUE)
 L_file <- args[1]
 species <- tolower(args[2])
 out_prefix <- args[3]
+orientation <- if (length(args) >= 4) {
+  tolower(args[4])
+} else {
+  "components_by_genes"
+}
+max_components <- if (length(args) >= 5) {
+  as.integer(args[5])
+} else {
+  NA_integer_
+}
 
-# Read L matrix
+# Read a component-loading matrix.
 L <- read.delim(
   L_file,
   row.names = 1,
   check.names = FALSE,
   sep = "\t"
 )
+
+if (orientation == "genes_by_components") {
+  L <- t(as.matrix(L))
+} else if (orientation != "components_by_genes") {
+  stop(
+    "orientation must be 'components_by_genes' or 'genes_by_components'"
+  )
+}
+
+if (!is.na(max_components)) {
+  if (max_components < 1) {
+    stop("max_components must be positive")
+  }
+  L <- L[seq_len(min(max_components, nrow(L))), , drop = FALSE]
+}
 
 all_genes <- colnames(L)
 

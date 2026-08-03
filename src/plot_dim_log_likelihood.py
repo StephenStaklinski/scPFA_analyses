@@ -58,6 +58,11 @@ def parse_args():
         default=0.05,
         help="Adjusted p-value cutoff for counting GO-enriched factors.",
     )
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Write the summary TSV without creating a PDF.",
+    )
     parser.add_argument("output_pdf")
     parser.add_argument("logs", nargs="+")
     return parser.parse_args()
@@ -314,6 +319,9 @@ def main():
         df["delta_combined_log_likelihood"] / combined_reference_gain
     )
     df.to_csv(output_pdf.with_suffix(".tsv"), sep="\t", index=False)
+    if args.summary_only:
+        print(f"Saved summary to: {output_pdf.with_suffix('.tsv')}")
+        return 0
 
     delta_df = df.dropna(
         subset=["delta_observation_log_likelihood", "delta_combined_log_likelihood"]

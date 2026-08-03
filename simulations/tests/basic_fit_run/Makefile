@@ -9,6 +9,7 @@ PREV_OUTPREFIX := ./prev_run/quinn.90
 OUTPREFIX := quinn.90
 FILTER_PREFIX := ${OUTPREFIX}.filter
 FILTERED_GEX := ${FILTER_PREFIX}.filtered.tsv
+PCA_INIT := ${OUTPREFIX}.pca.eigenvectors.tsv
 
 all: run compare
 run: ${OUTPREFIX}.log
@@ -28,16 +29,25 @@ ${FILTERED_GEX}: ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex subset_${OUTP
 		--filter-test lrt-lambda \
 		--seed 1 > ${FILTER_PREFIX}.term
 
+# Compute the maxPhyloPCA initialization separately from model fitting.
+${PCA_INIT}: ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${FILTERED_GEX}
+	${GEX_LINEAGE_DIR}/bin/gexPca \
+		--tree $< \
+		--expr ${FILTERED_GEX} \
+		--outprefix ${OUTPREFIX} \
+		--dim 5 > ${OUTPREFIX}.pca.term
+
 # Fit the factor model to the filtered matrix.
 ${OUTPREFIX}.term ${OUTPREFIX}.time ${OUTPREFIX}.log ${OUTPREFIX}.summary.tsv \
 ${OUTPREFIX}.X.tsv ${OUTPREFIX}.F.tsv ${OUTPREFIX}.L.tsv: \
-${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${FILTERED_GEX}
+${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex ${FILTERED_GEX} ${PCA_INIT}
 	/usr/bin/time -o ${OUTPREFIX}.time \
 		${GEX_LINEAGE_DIR}/bin/gexFactor \
 		--trees ${INPUT_DATA_DIR}/quinn_CP90/${OUTPREFIX}.var.nex \
 		--expr ${FILTERED_GEX} \
 		--outprefix ${OUTPREFIX} \
 		--dim 5 \
+		--pca ${PCA_INIT} \
 		--seed 1 > ${OUTPREFIX}.term
 
 # Compare the final objective value

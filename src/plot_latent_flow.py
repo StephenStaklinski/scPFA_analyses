@@ -101,7 +101,7 @@ WADDINGTON_HILL_SMOOTH_SIGMA = 1.5
 # Each tip contributes one full root-to-tip path, so shared routes are counted
 # once per descendant cell and appear as deeper, darker Waddington valleys.
 WADDINGTON_TRAJECTORY_DENSITY_BINS = FACTOR_RATE_BINS
-WADDINGTON_TRAJECTORY_DENSITY_SMOOTH_SIGMA = 1.5
+WADDINGTON_TRAJECTORY_DENSITY_SMOOTH_SIGMA = 0.5
 WADDINGTON_TRAJECTORY_SAMPLES_PER_BIN = 2
 WADDINGTON_TRAJECTORY_SAMPLES_MAX = 100
 # In the Waddington-style view, high-density trajectory regions are drawn as
@@ -138,6 +138,25 @@ parser = argparse.ArgumentParser()
 parser.add_argument("latent_tree_nodes_tsv")
 parser.add_argument("out_prefix")
 parser.add_argument("--min_delta_quantile", type=float, default=0.0)
+parser.add_argument("--only-embedding-waddington", action="store_true", help=argparse.SUPPRESS)
+parser.add_argument("--waddington-density-bins", type=int, default=WADDINGTON_TRAJECTORY_DENSITY_BINS)
+parser.add_argument("--waddington-density-smooth-sigma", type=float, default=WADDINGTON_TRAJECTORY_DENSITY_SMOOTH_SIGMA)
+parser.add_argument("--waddington-samples-per-bin", type=float, default=WADDINGTON_TRAJECTORY_SAMPLES_PER_BIN)
+parser.add_argument("--waddington-samples-max", type=int, default=WADDINGTON_TRAJECTORY_SAMPLES_MAX)
+parser.add_argument("--waddington-relief-smooth-sigma", type=float, default=WADDINGTON_HILL_SMOOTH_SIGMA)
+parser.add_argument("--waddington-valley-strength", type=float, default=WADDINGTON_VALLEY_STRENGTH)
+parser.add_argument("--waddington-line-every", type=int, default=WADDINGTON_LINE_EVERY)
+parser.add_argument("--waddington-line-alpha", type=float, default=WADDINGTON_LINE_ALPHA)
+parser.add_argument("--waddington-line-width", type=float, default=WADDINGTON_LINE_LW)
+parser.add_argument("--waddington-surface-alpha", type=float, default=WADDINGTON_ALPHA_SURF)
+parser.add_argument("--waddington-shade-alpha", type=float, default=WADDINGTON_SHADE_ALPHA)
+parser.add_argument("--waddington-ledge-height", type=float, default=WADDINGTON_DENSITY_LEDGE_HEIGHT)
+parser.add_argument("--waddington-ledge-bins", type=int, default=WADDINGTON_DENSITY_LEDGE_BINS)
+parser.add_argument("--waddington-ledge-smooth-sigma", type=float, default=WADDINGTON_DENSITY_LEDGE_SMOOTH_SIGMA)
+parser.add_argument("--waddington-ledge-valley-strength", type=float, default=WADDINGTON_DENSITY_LEDGE_VALLEY_STRENGTH)
+parser.add_argument("--waddington-label-hist-bins", type=int, default=WADDINGTON_LABEL_HIST_BINS)
+parser.add_argument("--waddington-label-hist-height", type=float, default=WADDINGTON_LABEL_HIST_HEIGHT)
+parser.add_argument("--waddington-label-hist-y-offset", type=float, default=WADDINGTON_LABEL_HIST_Y_OFFSET)
 parser.add_argument(
     "--barcode-discrete-label-tsv",
     help=(
@@ -146,6 +165,27 @@ parser.add_argument(
     ),
 )
 args = parser.parse_args()
+
+# The dedicated tuned-Waddington entry point exposes these as command-line
+# controls. Defaults exactly reproduce the settings used by this full script.
+WADDINGTON_TRAJECTORY_DENSITY_BINS = args.waddington_density_bins
+WADDINGTON_TRAJECTORY_DENSITY_SMOOTH_SIGMA = args.waddington_density_smooth_sigma
+WADDINGTON_TRAJECTORY_SAMPLES_PER_BIN = args.waddington_samples_per_bin
+WADDINGTON_TRAJECTORY_SAMPLES_MAX = args.waddington_samples_max
+WADDINGTON_HILL_SMOOTH_SIGMA = args.waddington_relief_smooth_sigma
+WADDINGTON_VALLEY_STRENGTH = args.waddington_valley_strength
+WADDINGTON_LINE_EVERY = args.waddington_line_every
+WADDINGTON_LINE_ALPHA = args.waddington_line_alpha
+WADDINGTON_LINE_LW = args.waddington_line_width
+WADDINGTON_ALPHA_SURF = args.waddington_surface_alpha
+WADDINGTON_SHADE_ALPHA = args.waddington_shade_alpha
+WADDINGTON_DENSITY_LEDGE_HEIGHT = args.waddington_ledge_height
+WADDINGTON_DENSITY_LEDGE_BINS = args.waddington_ledge_bins
+WADDINGTON_DENSITY_LEDGE_SMOOTH_SIGMA = args.waddington_ledge_smooth_sigma
+WADDINGTON_DENSITY_LEDGE_VALLEY_STRENGTH = args.waddington_ledge_valley_strength
+WADDINGTON_LABEL_HIST_BINS = args.waddington_label_hist_bins
+WADDINGTON_LABEL_HIST_HEIGHT = args.waddington_label_hist_height
+WADDINGTON_LABEL_HIST_Y_OFFSET = args.waddington_label_hist_y_offset
 
 
 sns.set_theme(
@@ -234,11 +274,12 @@ total_dist_df = total_dist_df.rename(
         "latent_distance_from_root": "total_euclidean_distance",
     }
 )
-total_dist_df.to_csv(
-    f"{args.out_prefix}.total_euclidean_distance.tsv",
-    sep="\t",
-    index=False,
-)
+if not args.only_embedding_waddington:
+    total_dist_df.to_csv(
+        f"{args.out_prefix}.total_euclidean_distance.tsv",
+        sep="\t",
+        index=False,
+    )
 
 if INCLUDE_UMAP_PLOTS:
     import umap
@@ -261,7 +302,8 @@ else:
 
 root_row = df.loc[df["parent_id"] < 0].iloc[0]
 
-df.to_csv(f"{args.out_prefix}.latent_tree_nodes.umap.tsv", sep="\t", index=False)
+if not args.only_embedding_waddington:
+    df.to_csv(f"{args.out_prefix}.latent_tree_nodes.umap.tsv", sep="\t", index=False)
 
 parent_df = df[["node_id", "pc1", "pc2", "umap1", "umap2", "latent_distance_from_root"] + factor_cols].copy()
 parent_df = parent_df.rename(
@@ -313,8 +355,7 @@ def format_axis(ax, xcol, ycol, prefix):
     ax.set_ylim(ymin, ymax)
     ax.set_xlabel(xcol.upper())
     ax.set_ylabel(ycol.upper())
-    if prefix == "pca":
-        ax.set_aspect("equal", adjustable="box")
+    ax.set_aspect("auto")
     sns.despine(ax=ax)
 
 
@@ -1745,7 +1786,12 @@ def plot_embedding_landscapes_waddington():
         sns.despine(ax=ax)
         _draw_waddington_label_histograms(ax, component_col, xedges)
 
-    fig.savefig(f"{args.out_prefix}.embedding_transition_landscapes.waddington.pdf", bbox_inches="tight")
+    suffix = (
+        "embedding_transition_landscapes.tuned_waddington.pdf"
+        if args.only_embedding_waddington
+        else "embedding_transition_landscapes.waddington.pdf"
+    )
+    fig.savefig(f"{args.out_prefix}.{suffix}", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -1843,20 +1889,21 @@ def plot_factor_landscapes_waddington():
     plt.close(fig)
 
 
-projection_configs = [
-    ("pca", "pc1", "pc2"),
-]
-if INCLUDE_UMAP_PLOTS:
-    projection_configs.append(("umap", "umap1", "umap2"))
+if args.only_embedding_waddington:
+    plot_embedding_landscapes_waddington()
+else:
+    projection_configs = [
+        ("pca", "pc1", "pc2"),
+    ]
+    if INCLUDE_UMAP_PLOTS:
+        projection_configs.append(("umap", "umap1", "umap2"))
 
-for prefix, xcol, ycol in projection_configs:
-    plot_colored_projection(xcol, ycol, prefix, "tree_depth", "tree_depth")
-    plot_colored_projection(xcol, ycol, prefix, "latent_distance_from_root", "latent_distance_from_root")
-    plot_flow_projection(xcol, ycol, prefix)
-    plot_interpolated_vector_field(xcol, ycol, prefix)
+    for prefix, xcol, ycol in projection_configs:
+        plot_colored_projection(xcol, ycol, prefix, "tree_depth", "tree_depth")
+        plot_colored_projection(xcol, ycol, prefix, "latent_distance_from_root", "latent_distance_from_root")
+        plot_flow_projection(xcol, ycol, prefix)
+        plot_interpolated_vector_field(xcol, ycol, prefix)
 
-plot_circular_factor_trees()
-plot_embedding_landscapes()
-plot_factor_landscapes()
-plot_embedding_landscapes_waddington()
-plot_factor_landscapes_waddington()
+    plot_circular_factor_trees()
+    plot_embedding_landscapes_waddington()
+    plot_factor_landscapes_waddington()
