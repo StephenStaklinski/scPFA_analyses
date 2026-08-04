@@ -37,7 +37,10 @@ GSEA := $(SAMPLES:%=%.fit.L.gsea.tsv)
 FACTOR_HEATMAPS := $(SAMPLES:%=%.fit.L.factor_heatmap.pdf)
 ACTIVE_FACTOR_HEATMAPS := $(SAMPLES:%=%.fit.L.active_factor_heatmap.pdf)
 FLOW_TREES := $(SAMPLES:%=%.fit.latent_flow.factor_trees.pdf)
-EUCLIDEAN_PSEUDOTIME := $(SAMPLES:%=%.fit.latent_flow.euclidean_factor_pseudotime.pdf)
+PCA_TREE_DEPTH := $(SAMPLES:%=%.fit.latent_flow.pca.tree_depth.pdf)
+PCA_LATENT_DISTANCE := $(SAMPLES:%=%.fit.latent_flow.pca.latent_distance_from_root.pdf)
+PCA_PLOT_STAMPS := $(SAMPLES:%=%.fit.latent_flow.pca.plots.done)
+WADDINGTON_PLOTS := $(SAMPLES:%=%.fit.latent_flow.waddington.pdf)
 NO_RIBO_MITO_SAMPLES := $(SAMPLES:%=%_no_ribo_mito)
 NO_RIBO_MITO_FIT_SUMMARIES := $(NO_RIBO_MITO_SAMPLES:%=%.fit.summary.tsv)
 NO_RIBO_MITO_LOG_PLOTS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.log.pdf)
@@ -47,16 +50,21 @@ NO_RIBO_MITO_GSEA := $(NO_RIBO_MITO_SAMPLES:%=%.fit.L.gsea.tsv)
 NO_RIBO_MITO_FACTOR_HEATMAPS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.L.factor_heatmap.pdf)
 NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.L.active_factor_heatmap.pdf)
 NO_RIBO_MITO_FLOW_TREES := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.factor_trees.pdf)
-NO_RIBO_MITO_EUCLIDEAN_PSEUDOTIME := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.euclidean_factor_pseudotime.pdf)
+NO_RIBO_MITO_PCA_TREE_DEPTH := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.pca.tree_depth.pdf)
+NO_RIBO_MITO_PCA_LATENT_DISTANCE := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.pca.latent_distance_from_root.pdf)
+NO_RIBO_MITO_PCA_PLOT_STAMPS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.pca.plots.done)
+NO_RIBO_MITO_WADDINGTON_PLOTS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.waddington.pdf)
 ACTIVE_FACTOR_CORRELATIONS := tls1_tls2_no_ribo_mito.fit.L.active_factor_correlations.pdf
 
 .PHONY: all fit plotting archive clean clean-gexlineage FORCE
 all: fit plotting
 fit: $(FIT_SUMMARIES) $(NO_RIBO_MITO_FIT_SUMMARIES)
-plotting: $(LOG_PLOTS) $(PANEL_PLOTS) $(BROWNIAN_VARIANCE_PLOTS) $(GSEA) $(FACTOR_HEATMAPS) $(ACTIVE_FACTOR_HEATMAPS) $(FLOW_TREES) $(EUCLIDEAN_PSEUDOTIME) \
+plotting: $(LOG_PLOTS) $(PANEL_PLOTS) $(BROWNIAN_VARIANCE_PLOTS) $(GSEA) $(FACTOR_HEATMAPS) $(ACTIVE_FACTOR_HEATMAPS) \
+	$(FLOW_TREES) $(PCA_PLOT_STAMPS) $(WADDINGTON_PLOTS) \
 	$(NO_RIBO_MITO_LOG_PLOTS) $(NO_RIBO_MITO_PANEL_PLOTS) $(NO_RIBO_MITO_BROWNIAN_VARIANCE_PLOTS) $(NO_RIBO_MITO_GSEA) \
-	$(NO_RIBO_MITO_FACTOR_HEATMAPS) $(NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS) $(NO_RIBO_MITO_FLOW_TREES) \
-	$(NO_RIBO_MITO_EUCLIDEAN_PSEUDOTIME) $(ACTIVE_FACTOR_CORRELATIONS)
+	$(NO_RIBO_MITO_FACTOR_HEATMAPS) $(NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS) \
+	$(NO_RIBO_MITO_FLOW_TREES) $(NO_RIBO_MITO_PCA_PLOT_STAMPS) \
+	$(NO_RIBO_MITO_WADDINGTON_PLOTS) $(ACTIVE_FACTOR_CORRELATIONS)
 
 archive:
 	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
@@ -113,14 +121,17 @@ tls1_tls2_no_ribo_mito.fit.L.active_factor_correlations.pdf: \
 		--column-sample TLS2 /mnt/cwd/tls2_no_ribo_mito.fit.L.tsv /mnt/cwd/tls2_no_ribo_mito.fit.summary.tsv \
 		--out-prefix /mnt/cwd/tls1_tls2_no_ribo_mito.fit.L.active_factor_correlations
 
-%.fit.latent_flow.factor_trees.pdf %.fit.latent_flow.total_euclidean_distance.tsv: %.fit.latent_flow.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow
+%.fit.latent_flow.factor_trees.pdf: %.fit.latent_flow.tsv %.fit.summary.tsv $(SRC)/plot_latent_flow_trees.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_trees.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow --fit-summary /mnt/cwd/$*.fit.summary.tsv
 
-%.fit.latent_flow.euclidean_factor_pseudotime.pdf: %.fit.latent_flow.total_euclidean_distance.tsv $(PCA_UMAP_DIR)/%_gex.pca.tsv $(PCA_UMAP_DIR)/%_gex.umap.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PCA_UMAP_DIR):/mnt/pca_umap $(PYPLOTTING_SIF) python /mnt/src/plot_factor_euclidean_distance_pseudotime.py /mnt/pca_umap/$*_gex.pca.tsv /mnt/pca_umap/$*_gex.umap.tsv /mnt/cwd/$*.fit.latent_flow.total_euclidean_distance.tsv /mnt/cwd/$*.fit.latent_flow
+%.fit.latent_flow.pca.plots.done: %.fit.latent_flow.tsv $(SRC)/plot_latent_flow_pca.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_pca.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow
+	@test -s $*.fit.latent_flow.pca.tree_depth.pdf
+	@test -s $*.fit.latent_flow.pca.latent_distance_from_root.pdf
+	@touch $@
 
-%_no_ribo_mito.fit.latent_flow.euclidean_factor_pseudotime.pdf: %_no_ribo_mito.fit.latent_flow.total_euclidean_distance.tsv $(PCA_UMAP_DIR)/%_gex.pca.tsv $(PCA_UMAP_DIR)/%_gex.umap.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PCA_UMAP_DIR):/mnt/pca_umap $(PYPLOTTING_SIF) python /mnt/src/plot_factor_euclidean_distance_pseudotime.py /mnt/pca_umap/$*_gex.pca.tsv /mnt/pca_umap/$*_gex.umap.tsv /mnt/cwd/$*_no_ribo_mito.fit.latent_flow.total_euclidean_distance.tsv /mnt/cwd/$*_no_ribo_mito.fit.latent_flow
+%.fit.latent_flow.waddington.pdf: %.fit.latent_flow.tsv %.fit.summary.tsv $(SRC)/plot_latent_flow_waddington.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_waddington.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow --fit-summary /mnt/cwd/$*.fit.summary.tsv
 
 clean-gexlineage:
 	rm -f *.fit.*

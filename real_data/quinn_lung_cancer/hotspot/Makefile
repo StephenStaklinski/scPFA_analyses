@@ -24,12 +24,10 @@ MAX_GENES ?= 0
 
 MODULES := $(SAMPLES:%=%.hotspot.modules.tsv)
 GO_ENRICHMENT := $(SAMPLES:%=%.hotspot.modules.go.tsv)
-MODULE_FLOW := $(SAMPLES:%=%.hotspot.module_flow.tsv)
-WADDINGTON_PLOTS := $(SAMPLES:%=%.hotspot.module_flow.factor_transition_landscapes.waddington.pdf)
 SAMPLE_CORRELATIONS := module_sample_correlations.pdf
 
 .PHONY: all clean
-all: $(MODULES) $(GO_ENRICHMENT) $(WADDINGTON_PLOTS) $(SAMPLE_CORRELATIONS)
+all: $(MODULES) $(GO_ENRICHMENT) $(SAMPLE_CORRELATIONS)
 
 $(SAMPLE_CORRELATIONS): \
 		$(MODULES) \
@@ -78,28 +76,6 @@ $(SAMPLE_CORRELATIONS): \
 		human \
 		/mnt/cwd/$*.hotspot.modules.go \
 		> $*.hotspot.modules.go.term 2>&1
-
-%.hotspot.module_flow.tsv: %.hotspot.module_scores.tsv $(PREPROCESSED_DIR)/%.vine.mean.nwk
-	singularity exec \
-		--bind $(CURR_DIR):/mnt/cwd \
-		--bind $(SRC):/mnt/src \
-		--bind $(PREPROCESSED_DIR):/mnt/preprocessed_data \
-		$(HOTSPOT_SIF) \
-		python /mnt/src/hotspot_module_scores_to_latent_flow.py \
-		/mnt/cwd/$*.hotspot.module_scores.tsv \
-		/mnt/preprocessed_data/$*.vine.mean.nwk \
-		/mnt/cwd/$@
-
-%.hotspot.module_flow.factor_transition_landscapes.waddington.pdf: %.hotspot.module_flow.tsv $(PREPROCESSED_DIR)/%_barcode_tissue.tsv
-	singularity exec \
-		--bind $(CURR_DIR):/mnt/cwd \
-		--bind $(SRC):/mnt/src \
-		--bind $(PREPROCESSED_DIR):/mnt/preprocessed_data \
-		$(PYPLOTTING_SIF) \
-		python /mnt/src/plot_latent_flow.py \
-		/mnt/cwd/$< \
-		/mnt/cwd/$*.hotspot.module_flow \
-		--barcode-discrete-label-tsv /mnt/preprocessed_data/$*_barcode_tissue.tsv
 
 clean:
 	rm -f *.hotspot.*

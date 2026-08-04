@@ -10,15 +10,11 @@ GEXPCA := $(GEX_LINEAGE_DIR)/bin/gexPca
 SRC := $(BENCHMARKS_DIR)/src
 CONTAINERS := $(BENCHMARKS_DIR)/containers
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
-HOTSPOT_SIF := $(CONTAINERS)/hotspot/hotspot.sif
-PYPLOTTING_SIF := $(CONTAINERS)/pyplotting/pyplotting.sif
 CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_pca
 FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_filter
-PREPROCESSED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/preprocessed_data
 
 SAMPLES := tls1 tls2
 PCA_DIM := 50
-PCA_FLOW_DIMS ?= 10
 PCA_EIGENVECTORS := $(SAMPLES:%=%.pca.eigenvectors.tsv)
 PCA_TIMES := $(SAMPLES:%=%.pca.time)
 PCA_GSEA := $(SAMPLES:%=%.pca.gsea.tsv)
@@ -26,14 +22,11 @@ NO_RIBO_MITO_SAMPLES := $(SAMPLES:%=%_no_ribo_mito)
 NO_RIBO_MITO_PCA_EIGENVECTORS := $(NO_RIBO_MITO_SAMPLES:%=%.pca.eigenvectors.tsv)
 NO_RIBO_MITO_PCA_TIMES := $(NO_RIBO_MITO_SAMPLES:%=%.pca.time)
 NO_RIBO_MITO_PCA_GSEA := $(NO_RIBO_MITO_SAMPLES:%=%.pca.gsea.tsv)
-PCA_FLOW_STAMPS := $(SAMPLES:%=%.pca.latent_flow.plots.done)
-NO_RIBO_MITO_PCA_FLOW_STAMPS := $(NO_RIBO_MITO_SAMPLES:%=%.pca.latent_flow.plots.done)
 
 .PHONY: all clean
 all: $(PCA_EIGENVECTORS) $(PCA_TIMES) $(PCA_GSEA) \
 	$(NO_RIBO_MITO_PCA_EIGENVECTORS) $(NO_RIBO_MITO_PCA_TIMES) \
-	$(NO_RIBO_MITO_PCA_GSEA) $(PCA_FLOW_STAMPS) \
-	$(NO_RIBO_MITO_PCA_FLOW_STAMPS)
+	$(NO_RIBO_MITO_PCA_GSEA)
 
 %.pca.eigenvectors.tsv %.pca.time: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv
 	/usr/bin/time -o $*.pca.time $(GEXPCA) \
@@ -59,44 +52,6 @@ $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv
 		/mnt/cwd/$< mouse /mnt/cwd/$*.pca.gsea \
 		genes_by_components 10 \
 		> $*.pca.gsea.term
-
-%.pca.latent_flow.tsv: $(FILTERED_DIR)/%.moran.filtered.tsv %.pca.eigenvectors.tsv $(PREPROCESSED_DIR)/%.vine.mean.nwk $(SRC)/pca_scores_to_latent_flow.py $(HOTSPOT_SIF)
-	singularity exec \
-		--bind $(CURR_DIR):/mnt/cwd \
-		--bind $(SRC):/mnt/src \
-		--bind $(FILTERED_DIR):/mnt/gex_filter \
-		--bind $(PREPROCESSED_DIR):/mnt/preprocessed_data \
-		$(HOTSPOT_SIF) \
-		python /mnt/src/pca_scores_to_latent_flow.py \
-		/mnt/gex_filter/$*.moran.filtered.tsv \
-		/mnt/cwd/$*.pca.eigenvectors.tsv \
-		/mnt/preprocessed_data/$*.vine.mean.nwk \
-		/mnt/cwd/$@ \
-		--max-components $(PCA_FLOW_DIMS)
-
-%_no_ribo_mito.pca.latent_flow.tsv: $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv %_no_ribo_mito.pca.eigenvectors.tsv $(PREPROCESSED_DIR)/%.vine.mean.nwk $(SRC)/pca_scores_to_latent_flow.py $(HOTSPOT_SIF)
-	singularity exec \
-		--bind $(CURR_DIR):/mnt/cwd \
-		--bind $(SRC):/mnt/src \
-		--bind $(FILTERED_DIR):/mnt/gex_filter \
-		--bind $(PREPROCESSED_DIR):/mnt/preprocessed_data \
-		$(HOTSPOT_SIF) \
-		python /mnt/src/pca_scores_to_latent_flow.py \
-		/mnt/gex_filter/$*_no_ribo_mito.moran.filtered.tsv \
-		/mnt/cwd/$*_no_ribo_mito.pca.eigenvectors.tsv \
-		/mnt/preprocessed_data/$*.vine.mean.nwk \
-		/mnt/cwd/$@ \
-		--max-components $(PCA_FLOW_DIMS)
-
-%.pca.latent_flow.plots.done: %.pca.latent_flow.tsv $(SRC)/plot_latent_flow.py $(PYPLOTTING_SIF)
-	singularity exec \
-		--bind $(CURR_DIR):/mnt/cwd \
-		--bind $(SRC):/mnt/src \
-		$(PYPLOTTING_SIF) \
-		python /mnt/src/plot_latent_flow.py \
-		/mnt/cwd/$< \
-		/mnt/cwd/$*.pca.latent_flow
-	touch $@
 
 clean:
 	rm -f *.pca.*

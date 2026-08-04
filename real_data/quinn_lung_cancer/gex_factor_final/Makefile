@@ -39,7 +39,10 @@ GSEA := $(CLONES:%=quinn_%.fit.L.gsea.tsv)
 FACTOR_HEATMAPS := $(CLONES:%=quinn_%.fit.L.factor_heatmap.pdf)
 ACTIVE_FACTOR_HEATMAPS := $(CLONES:%=quinn_%.fit.L.active_factor_heatmap.pdf)
 FLOW_TREES := $(CLONES:%=quinn_%.fit.latent_flow.factor_trees.pdf)
-EUCLIDEAN_PSEUDOTIME := $(CLONES:%=quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf)
+PCA_TREE_DEPTH := $(CLONES:%=quinn_%.fit.latent_flow.pca.tree_depth.pdf)
+PCA_LATENT_DISTANCE := $(CLONES:%=quinn_%.fit.latent_flow.pca.latent_distance_from_root.pdf)
+PCA_PLOT_STAMPS := $(CLONES:%=quinn_%.fit.latent_flow.pca.plots.done)
+WADDINGTON_PLOTS := $(CLONES:%=quinn_%.fit.latent_flow.waddington.pdf)
 NO_RIBO_MITO_FIT_SUMMARIES := $(CLONES:%=quinn_%_no_ribo_mito.fit.summary.tsv)
 NO_RIBO_MITO_LOG_PLOTS := $(CLONES:%=quinn_%_no_ribo_mito.fit.log.pdf)
 NO_RIBO_MITO_PANEL_PLOTS := $(CLONES:%=quinn_%_no_ribo_mito.fit.panel.png)
@@ -48,20 +51,21 @@ NO_RIBO_MITO_GSEA := $(CLONES:%=quinn_%_no_ribo_mito.fit.L.gsea.tsv)
 NO_RIBO_MITO_FACTOR_HEATMAPS := $(CLONES:%=quinn_%_no_ribo_mito.fit.L.factor_heatmap.pdf)
 NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS := $(CLONES:%=quinn_%_no_ribo_mito.fit.L.active_factor_heatmap.pdf)
 NO_RIBO_MITO_FLOW_TREES := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.factor_trees.pdf)
-NO_RIBO_MITO_EUCLIDEAN_PSEUDOTIME := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.euclidean_factor_pseudotime.pdf)
+NO_RIBO_MITO_PCA_TREE_DEPTH := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.pca.tree_depth.pdf)
+NO_RIBO_MITO_PCA_LATENT_DISTANCE := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.pca.latent_distance_from_root.pdf)
+NO_RIBO_MITO_PCA_PLOT_STAMPS := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.pca.plots.done)
+NO_RIBO_MITO_WADDINGTON_PLOTS := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.waddington.pdf)
 ACTIVE_FACTOR_CORRELATIONS := quinn_1_quinn_2_no_ribo_mito.fit.L.active_factor_correlations.pdf
 
-TUNED_WADDINGTON_PLOTS := $(CLONES:%=quinn_%.fit.latent_flow.embedding_transition_landscapes.tuned_waddington.pdf)
-NO_RIBO_MITO_TUNED_WADDINGTON_PLOTS := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.embedding_transition_landscapes.tuned_waddington.pdf)
-
-.PHONY: all fit plotting tuned_waddington archive clean clean-gexlineage FORCE
+.PHONY: all fit plotting archive clean clean-gexlineage FORCE
 all: fit plotting
 fit: $(FIT_SUMMARIES) $(NO_RIBO_MITO_FIT_SUMMARIES)
-plotting: $(LOG_PLOTS) $(PANEL_PLOTS) $(BROWNIAN_VARIANCE_PLOTS) $(GSEA) $(FACTOR_HEATMAPS) $(ACTIVE_FACTOR_HEATMAPS) $(FLOW_TREES) $(EUCLIDEAN_PSEUDOTIME) \
+plotting: $(LOG_PLOTS) $(PANEL_PLOTS) $(BROWNIAN_VARIANCE_PLOTS) $(GSEA) $(FACTOR_HEATMAPS) $(ACTIVE_FACTOR_HEATMAPS) \
+	$(FLOW_TREES) $(PCA_PLOT_STAMPS) $(WADDINGTON_PLOTS) \
 	$(NO_RIBO_MITO_LOG_PLOTS) $(NO_RIBO_MITO_PANEL_PLOTS) $(NO_RIBO_MITO_BROWNIAN_VARIANCE_PLOTS) $(NO_RIBO_MITO_GSEA) \
-	$(NO_RIBO_MITO_FACTOR_HEATMAPS) $(NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS) $(NO_RIBO_MITO_FLOW_TREES) \
-	$(NO_RIBO_MITO_EUCLIDEAN_PSEUDOTIME) $(ACTIVE_FACTOR_CORRELATIONS)
-tuned_waddington: $(TUNED_WADDINGTON_PLOTS) $(NO_RIBO_MITO_TUNED_WADDINGTON_PLOTS)
+	$(NO_RIBO_MITO_FACTOR_HEATMAPS) $(NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS) \
+	$(NO_RIBO_MITO_FLOW_TREES) $(NO_RIBO_MITO_PCA_PLOT_STAMPS) \
+	$(NO_RIBO_MITO_WADDINGTON_PLOTS) $(ACTIVE_FACTOR_CORRELATIONS)
 
 archive:
 	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
@@ -120,27 +124,31 @@ quinn_1_quinn_2_no_ribo_mito.fit.L.active_factor_correlations.pdf: \
 		--comparison CP2 /mnt/cwd/quinn_2_no_ribo_mito.fit.L.tsv /mnt/cwd/quinn_2_no_ribo_mito.fit.summary.tsv CP4 /mnt/cwd/quinn_4_no_ribo_mito.fit.L.tsv /mnt/cwd/quinn_4_no_ribo_mito.fit.summary.tsv \
 		--out-prefix /mnt/cwd/quinn_1_quinn_2_no_ribo_mito.fit.L.active_factor_correlations
 
-quinn_%.fit.latent_flow.factor_trees.pdf quinn_%.fit.latent_flow.total_euclidean_distance.tsv: quinn_%.fit.latent_flow.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow --barcode-discrete-label-tsv /mnt/preprocessed_data/quinn_$*_barcode_tissue.tsv
+quinn_%.fit.latent_flow.factor_trees.pdf: quinn_%.fit.latent_flow.tsv quinn_%.fit.summary.tsv $(SRC)/plot_latent_flow_trees.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_trees.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow --fit-summary /mnt/cwd/quinn_$*.fit.summary.tsv
 
-quinn_%_no_ribo_mito.fit.latent_flow.factor_trees.pdf quinn_%_no_ribo_mito.fit.latent_flow.total_euclidean_distance.tsv: quinn_%_no_ribo_mito.fit.latent_flow.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow --barcode-discrete-label-tsv /mnt/preprocessed_data/quinn_$*_barcode_tissue.tsv
+quinn_%_no_ribo_mito.fit.latent_flow.factor_trees.pdf: quinn_%_no_ribo_mito.fit.latent_flow.tsv quinn_%_no_ribo_mito.fit.summary.tsv $(SRC)/plot_latent_flow_trees.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_trees.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow --fit-summary /mnt/cwd/quinn_$*_no_ribo_mito.fit.summary.tsv
 
-quinn_%.fit.latent_flow.embedding_transition_landscapes.tuned_waddington.pdf: quinn_%.fit.latent_flow.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv $(SRC)/plot_latent_flow.py
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) \
-		python /mnt/src/plot_latent_flow.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow --only-embedding-waddington \
-		--barcode-discrete-label-tsv /mnt/preprocessed_data/quinn_$*_barcode_tissue.tsv
+quinn_%.fit.latent_flow.pca.plots.done: quinn_%.fit.latent_flow.tsv $(SRC)/plot_latent_flow_pca.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_pca.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow
+	@test -s quinn_$*.fit.latent_flow.pca.tree_depth.pdf
+	@test -s quinn_$*.fit.latent_flow.pca.latent_distance_from_root.pdf
+	@touch $@
 
-quinn_%_no_ribo_mito.fit.latent_flow.embedding_transition_landscapes.tuned_waddington.pdf: quinn_%_no_ribo_mito.fit.latent_flow.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv $(SRC)/plot_latent_flow.py
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) \
-		python /mnt/src/plot_latent_flow.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow --only-embedding-waddington \
-		--barcode-discrete-label-tsv /mnt/preprocessed_data/quinn_$*_barcode_tissue.tsv
+quinn_%_no_ribo_mito.fit.latent_flow.pca.plots.done: quinn_%_no_ribo_mito.fit.latent_flow.tsv $(SRC)/plot_latent_flow_pca.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_pca.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow
+	@test -s quinn_$*_no_ribo_mito.fit.latent_flow.pca.tree_depth.pdf
+	@test -s quinn_$*_no_ribo_mito.fit.latent_flow.pca.latent_distance_from_root.pdf
+	@touch $@
 
-quinn_%.fit.latent_flow.euclidean_factor_pseudotime.pdf: quinn_%.fit.latent_flow.total_euclidean_distance.tsv $(PCA_UMAP_DIR)/quinn_%_gex.pca.tsv $(PCA_UMAP_DIR)/quinn_%_gex.umap.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PCA_UMAP_DIR):/mnt/pca_umap $(PYPLOTTING_SIF) python /mnt/src/plot_factor_euclidean_distance_pseudotime.py /mnt/pca_umap/quinn_$*_gex.pca.tsv /mnt/pca_umap/quinn_$*_gex.umap.tsv /mnt/cwd/quinn_$*.fit.latent_flow.total_euclidean_distance.tsv /mnt/cwd/quinn_$*.fit.latent_flow
+quinn_%.fit.latent_flow.waddington.pdf: quinn_%.fit.latent_flow.tsv quinn_%.fit.summary.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv $(SRC)/plot_latent_flow_waddington.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_waddington.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow --fit-summary /mnt/cwd/quinn_$*.fit.summary.tsv 
+#--barcode-discrete-label-tsv /mnt/preprocessed_data/quinn_$*_barcode_tissue.tsv
 
-quinn_%_no_ribo_mito.fit.latent_flow.euclidean_factor_pseudotime.pdf: quinn_%_no_ribo_mito.fit.latent_flow.total_euclidean_distance.tsv $(PCA_UMAP_DIR)/quinn_%_gex.pca.tsv $(PCA_UMAP_DIR)/quinn_%_gex.umap.tsv
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PCA_UMAP_DIR):/mnt/pca_umap $(PYPLOTTING_SIF) python /mnt/src/plot_factor_euclidean_distance_pseudotime.py /mnt/pca_umap/quinn_$*_gex.pca.tsv /mnt/pca_umap/quinn_$*_gex.umap.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.total_euclidean_distance.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow
+quinn_%_no_ribo_mito.fit.latent_flow.waddington.pdf: quinn_%_no_ribo_mito.fit.latent_flow.tsv quinn_%_no_ribo_mito.fit.summary.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv $(SRC)/plot_latent_flow_waddington.py
+	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_waddington.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow --fit-summary /mnt/cwd/quinn_$*_no_ribo_mito.fit.summary.tsv 
+#--barcode-discrete-label-tsv /mnt/preprocessed_data/quinn_$*_barcode_tissue.tsv
 
 clean-gexlineage:
 	rm -f quinn_*.fit.*

@@ -267,52 +267,13 @@ F = df[factor_cols].to_numpy(float)
 
 df["latent_distance_from_root"] = np.linalg.norm(F - root_f[None, :], axis=1)
 
-total_dist_df = df[["node_name", "latent_distance_from_root"]].copy()
-total_dist_df = total_dist_df.rename(
-    columns={
-        "node_name": "cell",
-        "latent_distance_from_root": "total_euclidean_distance",
-    }
-)
-if not args.only_embedding_waddington:
-    total_dist_df.to_csv(
-        f"{args.out_prefix}.total_euclidean_distance.tsv",
-        sep="\t",
-        index=False,
-    )
-
-if INCLUDE_UMAP_PLOTS:
-    import umap
-
-    reducer = umap.UMAP(
-        n_neighbors=UMAP_N_NEIGHBORS,
-        min_dist=UMAP_MIN_DIST,
-        random_state=UMAP_RANDOM_STATE,
-    )
-
-    tip_mask = df["is_tip"] == 1
-    reducer.fit(df.loc[tip_mask, factor_cols].to_numpy(float))
-    embedding = reducer.transform(df[factor_cols].to_numpy(float))
-
-    df["umap1"] = embedding[:, 0]
-    df["umap2"] = embedding[:, 1]
-else:
-    df["umap1"] = np.nan
-    df["umap2"] = np.nan
-
 root_row = df.loc[df["parent_id"] < 0].iloc[0]
-
-if not args.only_embedding_waddington:
-    df.to_csv(f"{args.out_prefix}.latent_tree_nodes.umap.tsv", sep="\t", index=False)
-
-parent_df = df[["node_id", "pc1", "pc2", "umap1", "umap2", "latent_distance_from_root"] + factor_cols].copy()
+parent_df = df[["node_id", "pc1", "pc2", "latent_distance_from_root"] + factor_cols].copy()
 parent_df = parent_df.rename(
     columns={
         "node_id": "parent_id",
         "pc1": "parent_pc1",
         "pc2": "parent_pc2",
-        "umap1": "parent_umap1",
-        "umap2": "parent_umap2",
         "latent_distance_from_root": "parent_latent_distance_from_root",
         **{c: f"parent_{c}" for c in factor_cols},
     }
@@ -1318,19 +1279,17 @@ def plot_embedding_landscapes():
         ("Latent distance", "latent_distance_from_root", "Latent distance"),
         ("PC1", "pc1", "PC1"),
         ("PC2", "pc2", "PC2"),
-        ("UMAP1", "umap1", "UMAP1"),
-        ("UMAP2", "umap2", "UMAP2"),
     ]
 
     fig, axes = plt.subplots(
-        1, 5,
-        figsize=(3.35 * 5, 3.35),
+        1, 3,
+        figsize=(3.35 * 3, 3.35),
         squeeze=False,
     )
 
     fig.subplots_adjust(
         left=0.045,
-        right=0.985,
+        right=0.975,
         bottom=0.30,
         top=0.86,
         wspace=0.50,
@@ -1711,29 +1670,23 @@ def plot_embedding_landscapes_waddington():
         ("Latent distance", "latent_distance_from_root", "Latent distance"),
         ("PC1", "pc1", "PC1"),
         ("PC2", "pc2", "PC2"),
-        ("UMAP1", "umap1", "UMAP1"),
-        ("UMAP2", "umap2", "UMAP2"),
     ]
 
     fig, axes = plt.subplots(
-        1, 5,
-        figsize=(3.35 * 5, 3.35),
+        1, 3,
+        figsize=(3.35 * 3, 3.35),
         squeeze=False,
     )
 
     fig.subplots_adjust(
         left=0.045,
-        right=0.985,
+        right=0.975,
         bottom=0.30,
         top=0.86,
         wspace=0.50,
     )
 
     for ax, (title, component_col, xlabel) in zip(axes.ravel(), component_configs):
-        if _is_umap_component(component_col) and not INCLUDE_UMAP_PLOTS:
-            ax.axis("off")
-            continue
-
         xedges, yedges, density_grid = _trajectory_density_grid(component_col, time_col)
 
         finite_vals = density_grid[np.isfinite(density_grid)]
@@ -1892,18 +1845,10 @@ def plot_factor_landscapes_waddington():
 if args.only_embedding_waddington:
     plot_embedding_landscapes_waddington()
 else:
-    projection_configs = [
-        ("pca", "pc1", "pc2"),
-    ]
-    if INCLUDE_UMAP_PLOTS:
-        projection_configs.append(("umap", "umap1", "umap2"))
-
-    for prefix, xcol, ycol in projection_configs:
-        plot_colored_projection(xcol, ycol, prefix, "tree_depth", "tree_depth")
-        plot_colored_projection(xcol, ycol, prefix, "latent_distance_from_root", "latent_distance_from_root")
-        plot_flow_projection(xcol, ycol, prefix)
-        plot_interpolated_vector_field(xcol, ycol, prefix)
-
+    plot_colored_projection("pc1", "pc2", "pca", "tree_depth", "tree_depth")
+    plot_colored_projection(
+        "pc1", "pc2", "pca", "latent_distance_from_root", "latent_distance_from_root"
+    )
     plot_circular_factor_trees()
     plot_embedding_landscapes_waddington()
     plot_factor_landscapes_waddington()
