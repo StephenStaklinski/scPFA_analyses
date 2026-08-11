@@ -20,9 +20,21 @@ NO_RIBO_MITO_PCA_INPUTS := $(foreach sample,$(SAMPLES),\
 NO_RIBO_MITO_FACTOR_INPUTS := $(foreach sample,$(SAMPLES),\
 	$(FACTOR_DIR)/$(sample)_no_ribo_mito.fit.L.tsv)
 
-.PHONY: all clean
+.PHONY: all archive clean
 
 all: $(OUTPUT) $(NO_RIBO_MITO_OUTPUT)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( gex_pca_gex_factor_comparison* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No PCA-gexFactor comparison outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 $(OUTPUT): $(PCA_INPUTS) $(FACTOR_INPUTS) $(PLOT_SCRIPT) $(PYPLOTTING_SIF)
 	/usr/bin/time -o gex_pca_gex_factor_comparison.time \

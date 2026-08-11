@@ -10,8 +10,10 @@ CP_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_factor_final
 
 SCRIPT := plot_cross_context_factor_comparison.py
 TREE_SCRIPT := plot_active_factor_ancestral_trees.py
+HOTSPOT_SCRIPT := plot_cross_context_hotspot_module_comparison.py
 OUT_PREFIX := bolondi_quinn_active_factors
 TREE_OUTPUT := bolondi_quinn_active_factor_ancestral_trees.png
+HOTSPOT_PREFIX := bolondi_quinn_hotspot_modules
 
 INPUTS := \
 	$(TLS_DIR)/tls1_no_ribo_mito.fit.L.gsea.tsv \
@@ -27,11 +29,15 @@ OUTPUTS := \
 	$(OUT_PREFIX).cross_context_factor_similarity.pdf \
 	$(OUT_PREFIX).cross_context_factor_similarity.tsv
 
+HOTSPOT_OUTPUTS := \
+	$(HOTSPOT_PREFIX).cross_context_hotspot_module_similarity.pdf \
+	$(HOTSPOT_PREFIX).cross_context_hotspot_module_similarity.tsv
+
 .PHONY: all clean
 
-all: $(OUTPUTS) $(TREE_OUTPUT)
+all: $(OUTPUTS) $(TREE_OUTPUT) $(HOTSPOT_OUTPUTS)
 
-$(OUTPUTS) &: $(SCRIPT) $(INPUTS) $(PYPLOTTING_SIF)
+$(OUTPUTS): $(SCRIPT) $(INPUTS) $(PYPLOTTING_SIF)
 	singularity exec \
 		--bind $(CURDIR):/mnt/cwd \
 		--bind $(TLS_DIR):/mnt/tls:ro \
@@ -43,6 +49,24 @@ $(OUTPUTS) &: $(SCRIPT) $(INPUTS) $(PYPLOTTING_SIF)
 			--sample CP1 cancer /mnt/cp/quinn_1_no_ribo_mito.fit.L.gsea.tsv /mnt/cp/quinn_1_no_ribo_mito.fit.summary.tsv \
 			--sample CP2 cancer /mnt/cp/quinn_2_no_ribo_mito.fit.L.gsea.tsv /mnt/cp/quinn_2_no_ribo_mito.fit.summary.tsv \
 			--out-prefix /mnt/cwd/$(OUT_PREFIX)
+
+$(HOTSPOT_OUTPUTS): $(HOTSPOT_SCRIPT) \
+		$(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/hotspot/tls1.hotspot.modules.go.tsv \
+		$(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/hotspot/tls2.hotspot.modules.go.tsv \
+		$(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/hotspot/quinn_1.hotspot.modules.go.tsv \
+		$(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/hotspot/quinn_2.hotspot.modules.go.tsv \
+		$(PYPLOTTING_SIF)
+	singularity exec \
+		--bind $(CURDIR):/mnt/cwd \
+		--bind $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/hotspot:/mnt/tls_hotspot:ro \
+		--bind $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/hotspot:/mnt/cp_hotspot:ro \
+		$(PYPLOTTING_SIF) \
+		python /mnt/cwd/$(HOTSPOT_SCRIPT) \
+			--sample TLS1 development /mnt/tls_hotspot/tls1.hotspot.modules.go.tsv \
+			--sample TLS2 development /mnt/tls_hotspot/tls2.hotspot.modules.go.tsv \
+			--sample CP1 cancer /mnt/cp_hotspot/quinn_1.hotspot.modules.go.tsv \
+			--sample CP2 cancer /mnt/cp_hotspot/quinn_2.hotspot.modules.go.tsv \
+			--out-prefix /mnt/cwd/$(HOTSPOT_PREFIX)
 
 $(TREE_OUTPUT): $(TREE_SCRIPT) \
 		$(TLS_DIR)/tls1_no_ribo_mito.fit.latent_flow.tsv $(TLS_DIR)/tls1_no_ribo_mito.fit.summary.tsv \
@@ -63,4 +87,4 @@ $(TREE_OUTPUT): $(TREE_SCRIPT) \
 			--output /mnt/cwd/$@
 
 clean:
-	rm -f $(OUTPUTS) $(TREE_OUTPUT)
+	rm -f $(OUTPUTS) $(TREE_OUTPUT) $(HOTSPOT_OUTPUTS)

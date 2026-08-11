@@ -11,9 +11,21 @@ CLONES := 1 2 3 4
 SCRIPT := plot_factor_distance_raw_pca.py
 OUTPUTS := $(CLONES:%=quinn_%.factor_latent_distance.raw_pca.pdf)
 
-.PHONY: all clean
+.PHONY: all archive clean
 
 all: $(OUTPUTS)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( *.factor_latent_distance.raw_pca.* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No raw-PCA trajectory outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 quinn_%.factor_latent_distance.raw_pca.pdf: \
 		$(PCA_DIR)/quinn_%_gex.pca.tsv \

@@ -22,10 +22,22 @@ NO_RIBO_MITO_PCA_EIGENVECTORS := $(CLONES:%=quinn_%_no_ribo_mito.pca.eigenvector
 NO_RIBO_MITO_PCA_TIMES := $(CLONES:%=quinn_%_no_ribo_mito.pca.time)
 NO_RIBO_MITO_PCA_GSEA := $(CLONES:%=quinn_%_no_ribo_mito.pca.gsea.tsv)
 
-.PHONY: all clean
+.PHONY: all archive clean
 all: $(PCA_EIGENVECTORS) $(PCA_TIMES) $(PCA_GSEA) \
 	$(NO_RIBO_MITO_PCA_EIGENVECTORS) $(NO_RIBO_MITO_PCA_TIMES) \
 	$(NO_RIBO_MITO_PCA_GSEA)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( quinn_*.pca.* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No PCA outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 quinn_%.pca.eigenvectors.tsv quinn_%.pca.time: $(FILTERED_DIR)/quinn_%.tree.nex $(FILTERED_DIR)/quinn_%.moran.filtered.tsv
 	/usr/bin/time -o quinn_$*.pca.time $(GEXPCA) \

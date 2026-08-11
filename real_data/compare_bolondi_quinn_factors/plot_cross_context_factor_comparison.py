@@ -148,12 +148,13 @@ def plot_similarity(similarity, output_path):
         ax=axis,
         cmap=positive_rd_bu,
         vmin=0,
-        vmax=1,
+        vmax=0.20,
         linewidths=0.45,
         linecolor="white",
         cbar_kws={
             "label": "Jaccard similarity of significant GO term sets",
             "shrink": 0.78,
+            "ticks": [0.00, 0.05, 0.10, 0.15, 0.20],
         },
     )
     axis.set_xlabel("Lung cancer factors")

@@ -15,23 +15,34 @@ CIRCULAR_TREE_COLS = 5
 parser = argparse.ArgumentParser()
 parser.add_argument("latent_tree_nodes_tsv")
 parser.add_argument("out_prefix")
-parser.add_argument("--fit-summary", required=True)
+parser.add_argument("--fit-summary")
 parser.add_argument("--active-variance-threshold", type=float, default=1e-5)
+parser.add_argument("--factor", type=int, action="append",
+                    help="Factor/module number to plot (repeatable); bypasses --fit-summary")
+parser.add_argument("--title-prefix", default="Factor")
+parser.add_argument("--output",
+                    help="Output path (default: OUT_PREFIX.factor_trees.pdf)")
+parser.add_argument("--dpi", type=int, default=300)
 args = parser.parse_args()
 
-mpl.rcParams.update({"savefig.dpi": 300, "pdf.fonttype": 42, "ps.fonttype": 42})
+mpl.rcParams.update({"savefig.dpi": args.dpi, "pdf.fonttype": 42, "ps.fonttype": 42})
 
 df = pd.read_csv(args.latent_tree_nodes_tsv, sep="\t")
 factor_cols = [c for c in df.columns if c.startswith("factor_")]
 if not factor_cols:
     raise ValueError("No factor_* columns found.")
 
-summary = pd.read_csv(args.fit_summary, sep="\t", index_col=0)
 active_factor_cols = []
-for parameter, value in summary["value"].items():
-    match = re.fullmatch(r"sigma2_latent_LF([0-9]+)", parameter)
-    if match and float(value) > args.active_variance_threshold:
-        active_factor_cols.append(f"factor_{int(match.group(1))}")
+if args.factor:
+    active_factor_cols = [f"factor_{number}" for number in args.factor]
+else:
+    if not args.fit_summary:
+        parser.error("--fit-summary is required unless --factor is supplied")
+    summary = pd.read_csv(args.fit_summary, sep="\t", index_col=0)
+    for parameter, value in summary["value"].items():
+        match = re.fullmatch(r"sigma2_latent_LF([0-9]+)", parameter)
+        if match and float(value) > args.active_variance_threshold:
+            active_factor_cols.append(f"factor_{int(match.group(1))}")
 missing = [factor for factor in active_factor_cols if factor not in factor_cols]
 if missing:
     raise ValueError("Active factors absent from latent-flow TSV: " + ", ".join(missing))
@@ -159,7 +170,8 @@ def plot_circular_factor_trees():
         ax.set_yticks([])
         ax.grid(False)
         ax.spines["polar"].set_visible(False)
-        ax.set_title(format_label(factor_col), pad=8)
+        factor_number = factor_col.removeprefix("factor_")
+        ax.set_title(f"{args.title_prefix} {factor_number}", pad=8)
 
         sm = mpl.cm.ScalarMappable(norm=norm, cmap=TREE_CMAP)
         sm.set_array([])
@@ -171,7 +183,8 @@ def plot_circular_factor_trees():
     for ax in axes[n_factors:]:
         ax.axis("off")
 
-    fig.savefig(f"{args.out_prefix}.factor_trees.pdf", bbox_inches="tight")
+    output = args.output or f"{args.out_prefix}.factor_trees.pdf"
+    fig.savefig(output, bbox_inches="tight", dpi=args.dpi)
     plt.close(fig)
 
 

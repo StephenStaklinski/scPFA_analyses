@@ -33,13 +33,29 @@ GO_PLOTS := \
 OVERLAP_PLOTS := no_ribo_mito.heritable_overlap.pdf
 OVERLAP_SCRIPT := $(SRC)/plot_filter_gene_set_overlap_four_samples.py
 
-.PHONY: all filter filter_no_ribo_mito go overlap ribo_mito_heritability clean
+.PHONY: all filter filter_no_ribo_mito go overlap ribo_mito_heritability archive clean
 all: filter go overlap ribo_mito_heritability
 filter: $(FILTERED_GEX) filter_no_ribo_mito
 filter_no_ribo_mito: $(NO_RIBO_MITO_FILTERED_GEX)
 go: $(GO_PLOTS)
 overlap: $(OVERLAP_PLOTS)
 ribo_mito_heritability: $(RIBO_MITO_HERITABILITY_PLOT)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( \
+		quinn_*.tree.nex quinn_*.filtered.tsv quinn_*.correlation.*.tsv \
+		quinn_*.term quinn_*.time *.go.pdf *.go.tsv \
+		*.heritable_overlap.pdf *.heritable_overlap.tsv ribo_mito_heritability.pdf \
+	); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No gexFilter outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 quinn_%.tree.nex: $(PREPROCESSED_DIR)/quinn_%.vine.nex
 	awk -v tree_index="$(TREE_INDEX)" '\

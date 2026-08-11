@@ -15,12 +15,12 @@ GEXFACTOR := /home/staklins/projects/gex_lineage_project/gex_lineage/bin/gexFact
 CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_factor_final
 FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_filter
 PCA_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_pca
-PCA_UMAP_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/pca_umap
+
 SAMPLES := tls1 tls2
 
 # Selected from ../gex_factor_dim_sweep/*.dim_summary.pdf.
-DIM_tls1 := 1
-DIM_tls2 := 1
+DIM_tls1 := 10
+DIM_tls2 := 10
 NO_RIBO_MITO_DIM_tls1 := 10
 NO_RIBO_MITO_DIM_tls2 := 10
 FIT_CONFIG = dim=$(DIM_$(1)) latent_variance=fixed_one
@@ -37,9 +37,6 @@ GSEA := $(SAMPLES:%=%.fit.L.gsea.tsv)
 FACTOR_HEATMAPS := $(SAMPLES:%=%.fit.L.factor_heatmap.pdf)
 ACTIVE_FACTOR_HEATMAPS := $(SAMPLES:%=%.fit.L.active_factor_heatmap.pdf)
 FLOW_TREES := $(SAMPLES:%=%.fit.latent_flow.factor_trees.pdf)
-PCA_TREE_DEPTH := $(SAMPLES:%=%.fit.latent_flow.pca.tree_depth.pdf)
-PCA_LATENT_DISTANCE := $(SAMPLES:%=%.fit.latent_flow.pca.latent_distance_from_root.pdf)
-PCA_PLOT_STAMPS := $(SAMPLES:%=%.fit.latent_flow.pca.plots.done)
 WADDINGTON_PLOTS := $(SAMPLES:%=%.fit.latent_flow.waddington.pdf)
 NO_RIBO_MITO_SAMPLES := $(SAMPLES:%=%_no_ribo_mito)
 NO_RIBO_MITO_FIT_SUMMARIES := $(NO_RIBO_MITO_SAMPLES:%=%.fit.summary.tsv)
@@ -50,9 +47,6 @@ NO_RIBO_MITO_GSEA := $(NO_RIBO_MITO_SAMPLES:%=%.fit.L.gsea.tsv)
 NO_RIBO_MITO_FACTOR_HEATMAPS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.L.factor_heatmap.pdf)
 NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.L.active_factor_heatmap.pdf)
 NO_RIBO_MITO_FLOW_TREES := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.factor_trees.pdf)
-NO_RIBO_MITO_PCA_TREE_DEPTH := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.pca.tree_depth.pdf)
-NO_RIBO_MITO_PCA_LATENT_DISTANCE := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.pca.latent_distance_from_root.pdf)
-NO_RIBO_MITO_PCA_PLOT_STAMPS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.pca.plots.done)
 NO_RIBO_MITO_WADDINGTON_PLOTS := $(NO_RIBO_MITO_SAMPLES:%=%.fit.latent_flow.waddington.pdf)
 ACTIVE_FACTOR_CORRELATIONS := tls1_tls2_no_ribo_mito.fit.L.active_factor_correlations.pdf
 
@@ -78,15 +72,17 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-%.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv $(PCA_DIR)/%.pca.eigenvectors.tsv $$(call FIT_CONFIG_CHANGED,$$*)
+# $(PCA_DIR)/%.pca.eigenvectors.tsv
+%.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv $$(call FIT_CONFIG_CHANGED,$$*)
 	/usr/bin/time -o $*.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/$*.tree.nex --expr $(FILTERED_DIR)/$*.moran.filtered.tsv --outprefix $*.fit --dim $(DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*.fit.term
 	@printf '%s\n' '$(call FIT_CONFIG,$*)' > .fit_config.$*
 
-%_no_ribo_mito.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv $(PCA_DIR)/%_no_ribo_mito.pca.eigenvectors.tsv $$(call NO_RIBO_MITO_FIT_CONFIG_CHANGED,$$*)
+# $(PCA_DIR)/%_no_ribo_mito.pca.eigenvectors.tsv
+%_no_ribo_mito.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv $$(call NO_RIBO_MITO_FIT_CONFIG_CHANGED,$$*)
 	/usr/bin/time -o $*_no_ribo_mito.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/$*.tree.nex --expr $(FILTERED_DIR)/$*_no_ribo_mito.moran.filtered.tsv --outprefix $*_no_ribo_mito.fit --dim $(NO_RIBO_MITO_DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*_no_ribo_mito.fit.term
 	@printf '%s\n' '$(call NO_RIBO_MITO_FIT_CONFIG,$*)' > .fit_config.$*_no_ribo_mito
 
-%.fit.F.tsv %.fit.L.tsv %.fit.X.tsv %.fit.log %.fit.latent_flow.tsv: %.fit.summary.tsv
+%.fit.F.tsv %.fit.L.tsv %.fit.X.tsv %.fit.log %.fit.latent_flow.tsv: | %.fit.summary.tsv
 	@test -e $@ || { echo "ERROR: expected output missing after gexFactor run: $@" >&2; exit 1; }
 
 %.fit.log.pdf: %.fit.summary.tsv
@@ -123,12 +119,6 @@ tls1_tls2_no_ribo_mito.fit.L.active_factor_correlations.pdf: \
 
 %.fit.latent_flow.factor_trees.pdf: %.fit.latent_flow.tsv %.fit.summary.tsv $(SRC)/plot_latent_flow_trees.py
 	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_trees.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow --fit-summary /mnt/cwd/$*.fit.summary.tsv
-
-%.fit.latent_flow.pca.plots.done: %.fit.latent_flow.tsv $(SRC)/plot_latent_flow_pca.py
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_pca.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow
-	@test -s $*.fit.latent_flow.pca.tree_depth.pdf
-	@test -s $*.fit.latent_flow.pca.latent_distance_from_root.pdf
-	@touch $@
 
 %.fit.latent_flow.waddington.pdf: %.fit.latent_flow.tsv %.fit.summary.tsv $(SRC)/plot_latent_flow_waddington.py
 	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_waddington.py /mnt/cwd/$*.fit.latent_flow.tsv /mnt/cwd/$*.fit.latent_flow --fit-summary /mnt/cwd/$*.fit.summary.tsv

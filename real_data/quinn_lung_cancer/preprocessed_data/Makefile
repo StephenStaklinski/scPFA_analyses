@@ -12,10 +12,31 @@ VINE := /home/staklins/projects/vine_project/vine/bin/vine
 CURR_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/preprocessed_data
 DATA_DIR_CHAR := ../raw_data/GSE161363/GSM4905334_character_matrices_5k
 DATA_DIR_GEX := ../raw_data/GSE161363/GSM4905335_barcodes_genes_matrix_5k
-CLONES := 1 2 3 4
+CLONES := 4 3 2 1
 
-.PHONY: all
-all: $(CLONES:%=quinn_%.vine.nex) $(CLONES:%=quinn_%_gex.tsv) $(CLONES:%=quinn_%_barcode_tissue.tsv)
+.PHONY: all archive
+all: vine gex tissue
+vine: $(CLONES:%=quinn_%.vine.nex)
+gex: $(CLONES:%=quinn_%_gex.tsv)
+tissue: $(CLONES:%=quinn_%_barcode_tissue.tsv)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( \
+		quinn_*_character_matrix.tsv \
+		quinn_*_barcode_tissue.tsv \
+		quinn_*_gex.tsv \
+		quinn_*_gex.term \
+		quinn_*.vine.* \
+	); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No preprocessing or VINE outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 quinn_%_character_matrix.tsv:
 	awk 'BEGIN{FS=OFS="\t"} { for(i=2;i<=NF;i++) if($$i=="-") $$i="-1"; print }' $(DATA_DIR_CHAR)/m5k_lg$*_character_matrix.alleleThresh.txt > $@
@@ -31,3 +52,6 @@ quinn_%.vine.nwk: quinn_%_character_matrix.tsv
 
 quinn_%.vine.nex: quinn_%.vine.nwk
 	singularity exec --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CASSIOPEIA_SIF) python /mnt/src/nwk2nex.py /mnt/cwd/$< /mnt/cwd/$@
+
+clean:
+	rm quinn_*

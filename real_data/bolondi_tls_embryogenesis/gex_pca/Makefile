@@ -23,10 +23,22 @@ NO_RIBO_MITO_PCA_EIGENVECTORS := $(NO_RIBO_MITO_SAMPLES:%=%.pca.eigenvectors.tsv
 NO_RIBO_MITO_PCA_TIMES := $(NO_RIBO_MITO_SAMPLES:%=%.pca.time)
 NO_RIBO_MITO_PCA_GSEA := $(NO_RIBO_MITO_SAMPLES:%=%.pca.gsea.tsv)
 
-.PHONY: all clean
+.PHONY: all archive clean
 all: $(PCA_EIGENVECTORS) $(PCA_TIMES) $(PCA_GSEA) \
 	$(NO_RIBO_MITO_PCA_EIGENVECTORS) $(NO_RIBO_MITO_PCA_TIMES) \
 	$(NO_RIBO_MITO_PCA_GSEA)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( *.pca.* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No PCA outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 %.pca.eigenvectors.tsv %.pca.time: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv
 	/usr/bin/time -o $*.pca.time $(GEXPCA) \

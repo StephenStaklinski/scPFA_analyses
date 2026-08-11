@@ -16,7 +16,8 @@ PREPROCESSED_DIR := ../preprocessed_data
 FILTERED_DIR := ../gex_filter
 
 CLONES := 1 2 3 4
-DIM_VALUES ?= 1 2 3 4 5 10 15 20 25 30
+DIM_VALUES ?= 1 2 3 4 5 10 15
+NO_RIBO_MITO_DIM_VALUES ?= $(DIM_VALUES) 20 25 30
 FIT_CP = $(firstword $(subst .K, ,$(1)))
 FIT_DIM = $(word 2,$(subst .K, ,$(1)))
 FIT_TREE = $(FILTERED_DIR)/quinn_$(call FIT_CP,$(1)).tree.nex
@@ -24,9 +25,9 @@ FIT_GEX = $(FILTERED_DIR)/quinn_$(call FIT_CP,$(1)).moran.filtered.tsv
 DIM_FIT_SUMMARIES = $(foreach dim,$(DIM_VALUES),quinn_$(1).K$(dim).fit.summary.tsv)
 DIM_FIT_GSEAS = $(foreach dim,$(DIM_VALUES),quinn_$(1).K$(dim).fit.L.gsea.tsv)
 DIM_FIT_TIMES = $(foreach dim,$(DIM_VALUES),quinn_$(1).K$(dim).fit.time)
-NO_RIBO_MITO_DIM_FIT_SUMMARIES = $(foreach dim,$(DIM_VALUES),quinn_$(1)_no_ribo_mito.K$(dim).fit.summary.tsv)
-NO_RIBO_MITO_DIM_FIT_GSEAS = $(foreach dim,$(DIM_VALUES),quinn_$(1)_no_ribo_mito.K$(dim).fit.L.gsea.tsv)
-NO_RIBO_MITO_DIM_FIT_TIMES = $(foreach dim,$(DIM_VALUES),quinn_$(1)_no_ribo_mito.K$(dim).fit.time)
+NO_RIBO_MITO_DIM_FIT_SUMMARIES = $(foreach dim,$(NO_RIBO_MITO_DIM_VALUES),quinn_$(1)_no_ribo_mito.K$(dim).fit.summary.tsv)
+NO_RIBO_MITO_DIM_FIT_GSEAS = $(foreach dim,$(NO_RIBO_MITO_DIM_VALUES),quinn_$(1)_no_ribo_mito.K$(dim).fit.L.gsea.tsv)
+NO_RIBO_MITO_DIM_FIT_TIMES = $(foreach dim,$(NO_RIBO_MITO_DIM_VALUES),quinn_$(1)_no_ribo_mito.K$(dim).fit.time)
 
 .PHONY: all archive clean-gexlineage
 all: quinn.dim_summary.pdf quinn_no_ribo_mito.dim_summary.pdf

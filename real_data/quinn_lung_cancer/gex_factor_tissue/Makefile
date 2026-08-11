@@ -21,9 +21,21 @@ ASSOCIATION_INPUTS := \
 	$(FACTOR_DIR)/quinn_2_no_ribo_mito.fit.F.tsv \
 	$(FACTOR_DIR)/quinn_2_no_ribo_mito.fit.summary.tsv
 
-.PHONY: all clean
+.PHONY: all archive clean
 
 all: $(TREE_OUTPUT) $(ASSOCIATION_OUTPUT) $(CLASSIFIER_OUTPUT)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( cp1_cp2.tissue_colored_trees.* cp1_cp2.active_factor_tissue_* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No tissue-analysis outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 $(TREE_OUTPUT): $(TREE_INPUTS) $(SRC)/plot_tissue_colored_trees.py
 	singularity exec \

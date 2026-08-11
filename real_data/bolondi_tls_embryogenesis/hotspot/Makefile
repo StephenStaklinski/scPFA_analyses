@@ -26,8 +26,20 @@ MODULES := $(SAMPLES:%=%.hotspot.modules.tsv)
 GO_ENRICHMENT := $(SAMPLES:%=%.hotspot.modules.go.tsv)
 SAMPLE_CORRELATIONS := module_sample_correlations.pdf
 
-.PHONY: all clean
+.PHONY: all archive clean
 all: $(MODULES) $(GO_ENRICHMENT) $(SAMPLE_CORRELATIONS)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( *.hotspot.* module_sample_correlations.pdf ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No Hotspot outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 $(SAMPLE_CORRELATIONS): \
 		$(MODULES) \
@@ -43,7 +55,7 @@ $(SAMPLE_CORRELATIONS): \
 		--pair-only \
 		--output /mnt/cwd/$@
 
-%.hotspot.modules.tsv: \
+%.hotspot.modules.tsv %.hotspot.autocorrelations.tsv: \
 		$(PREPROCESSED_DIR)/%_gex.tsv \
 		$(PREPROCESSED_DIR)/%.vine.mean.nwk \
 		$(HOTSPOT_SIF)
@@ -79,4 +91,4 @@ $(SAMPLE_CORRELATIONS): \
 		> $*.hotspot.modules.go.term 2>&1
 
 clean:
-	rm -f *.hotspot.*
+	rm -f tls*

@@ -19,9 +19,21 @@ PROGRAM_CORRELATIONS := gex_factor_hotspot_comparison.pdf
 NO_RIBO_MITO_PROGRAM_CORRELATIONS := gex_factor_hotspot_comparison_no_ribo_mito.pdf
 ACTIVE_NO_RIBO_MITO_PROGRAM_CORRELATIONS := gex_factor_hotspot_comparison_no_ribo_mito_active_factors.pdf
 
-.PHONY: all residual-test clean
+.PHONY: all residual-test archive clean
 all: $(PROGRAM_CORRELATIONS) $(NO_RIBO_MITO_PROGRAM_CORRELATIONS) \
 	$(ACTIVE_NO_RIBO_MITO_PROGRAM_CORRELATIONS)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( gex_factor_hotspot_comparison* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No gexFactor-Hotspot comparison outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 $(PROGRAM_CORRELATIONS): \
 		$(HOTSPOT_DIR)/tls1.hotspot.modules.tsv \

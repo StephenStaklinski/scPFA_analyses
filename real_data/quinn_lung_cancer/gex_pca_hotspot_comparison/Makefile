@@ -19,9 +19,21 @@ PCA_INPUTS := $(foreach sample,$(SAMPLES),\
 NO_RIBO_MITO_PCA_INPUTS := $(foreach sample,$(SAMPLES),\
 	$(PCA_DIR)/$(sample)_no_ribo_mito.pca.eigenvectors.tsv)
 
-.PHONY: all clean
+.PHONY: all archive clean
 
 all: $(OUTPUT) $(NO_RIBO_MITO_OUTPUT)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( pca_hotspot_comparison* ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No PCA-Hotspot comparison outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 $(OUTPUT): $(HOTSPOT_INPUTS) $(PCA_INPUTS) $(PLOT_SCRIPT) $(PYPLOTTING_SIF)
 	/usr/bin/time -o pca_hotspot_comparison.time \

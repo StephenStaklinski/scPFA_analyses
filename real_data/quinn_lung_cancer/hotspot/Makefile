@@ -25,9 +25,53 @@ MAX_GENES ?= 0
 MODULES := $(SAMPLES:%=%.hotspot.modules.tsv)
 GO_ENRICHMENT := $(SAMPLES:%=%.hotspot.modules.go.tsv)
 SAMPLE_CORRELATIONS := module_sample_correlations.pdf
+CP1_MODULE_FLOW := quinn_1.hotspot.module_scores.latent_flow.tsv
+CP1_MODULE_TREES := quinn_1.hotspot.module_trees.M3_M4_M5.600dpi.png
 
-.PHONY: all clean
+.PHONY: all archive clean cp1-module-trees
 all: $(MODULES) $(GO_ENRICHMENT) $(SAMPLE_CORRELATIONS)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( *.hotspot.* module_sample_correlations.pdf ); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No Hotspot outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
+
+cp1-module-trees: $(CP1_MODULE_TREES)
+
+$(CP1_MODULE_FLOW): \
+		quinn_1.hotspot.module_scores.tsv \
+		$(PREPROCESSED_DIR)/quinn_1.vine.mean.nwk \
+		$(SRC)/hotspot_module_scores_to_latent_flow.py \
+		$(HOTSPOT_SIF)
+	singularity exec \
+		--bind $(CURR_DIR):/mnt/cwd \
+		--bind $(SRC):/mnt/src \
+		--bind $(PREPROCESSED_DIR):/mnt/preprocessed_data \
+		$(HOTSPOT_SIF) \
+		python /mnt/src/hotspot_module_scores_to_latent_flow.py \
+		/mnt/cwd/quinn_1.hotspot.module_scores.tsv \
+		/mnt/preprocessed_data/quinn_1.vine.mean.nwk \
+		/mnt/cwd/$@
+
+$(CP1_MODULE_TREES): $(CP1_MODULE_FLOW) $(SRC)/plot_latent_flow_trees.py $(PYPLOTTING_SIF)
+	singularity exec \
+		--bind $(CURR_DIR):/mnt/cwd \
+		--bind $(SRC):/mnt/src \
+		$(PYPLOTTING_SIF) \
+		python /mnt/src/plot_latent_flow_trees.py \
+		/mnt/cwd/$(CP1_MODULE_FLOW) \
+		/mnt/cwd/quinn_1.hotspot.module_trees \
+		--factor 3 --factor 4 --factor 5 \
+		--title-prefix Module \
+		--output /mnt/cwd/$@ \
+		--dpi 600
 
 $(SAMPLE_CORRELATIONS): \
 		$(MODULES) \

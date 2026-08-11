@@ -31,13 +31,29 @@ GO_SAMPLE_RESULTS := $(SAMPLES:%=%_no_ribo_mito.mouse.go.tsv)
 GO_RESULTS := no_ribo_mito.go.tsv
 OVERLAP_PLOTS := no_ribo_mito.heritable_overlap.pdf
 
-.PHONY: all filter filter_no_ribo_mito go overlap ribo_mito_heritability clean
+.PHONY: all filter filter_no_ribo_mito go overlap ribo_mito_heritability archive clean
 all: filter go overlap ribo_mito_heritability
 filter: $(FILTERED_GEX) filter_no_ribo_mito
 filter_no_ribo_mito: $(NO_RIBO_MITO_FILTERED_GEX)
 go: $(GO_PLOTS)
 overlap: $(OVERLAP_PLOTS)
 ribo_mito_heritability: $(RIBO_MITO_HERITABILITY_PLOT)
+
+archive:
+	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
+	shopt -s nullglob; \
+	outputs=( \
+		*.tree.nex *.filtered.tsv *.correlation.*.tsv *.term *.time \
+		*.go.pdf *.go.tsv *.heritable_overlap.pdf *.heritable_overlap.tsv \
+		ribo_mito_heritability.pdf \
+	); \
+	if (( $${#outputs[@]} == 0 )); then \
+		echo "No gexFilter outputs to archive."; \
+	else \
+		mkdir -p "$$archive_dir"; \
+		mv "$${outputs[@]}" "$$archive_dir"/; \
+		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
+	fi
 
 %.tree.nex: $(PREPROCESSED_DIR)/%.vine.nex
 	awk -v tree_index="$(TREE_INDEX)" '\
