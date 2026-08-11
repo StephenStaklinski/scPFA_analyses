@@ -3,7 +3,7 @@ SHELL := /usr/bin/bash
 MAIN_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/gene_phylo_filter_validation_sims
 THREADS ?= 10
 
-.PHONY: run-all collect-results collect-performance collect-time collect-treestats
+.PHONY: run-all run-treestats collect-results collect-performance collect-time collect-treestats
 
 run-all:
 	for dir in $(MAIN_DIR)/*taxa; do \
@@ -12,16 +12,18 @@ run-all:
 		fi; \
 	done
 
-run_treestats:
+run-treestats:
 	for dir in $(MAIN_DIR)/*taxa; do \
-		if [[ -d $$dir ]]; then \
+		name=$${dir##*/}; \
+		ntaxa=$${name%taxa}; \
+		if [[ -d $$dir && $$ntaxa =~ ^[0-9]+$$ && $$ntaxa -le 1000 ]]; then \
 			$(MAKE) -C $$dir -j $(THREADS) treestats; \
 		fi; \
 	done
 
-collect-results: collect-performance collect-time collect-treestats
+collect-results: collect-performance collect-treestats
 
-collect-performance:
+collect-performance: collect-time
 	OUTFILE=$(MAIN_DIR)/eval.all.performance.txt; \
 	rm -f $$OUTFILE; \
 	performance_files=$$(find $(MAIN_DIR) -mindepth 2 -maxdepth 2 ! -path "$(MAIN_DIR)/archive*" -type f -name "eval.all.performance.txt"); \
@@ -31,7 +33,10 @@ collect-performance:
 		fi; \
 		tail -n +2 $$file >> $$OUTFILE; \
 	done; \
-	python $(MAIN_DIR)/plot_all_performance.py $$OUTFILE $(MAIN_DIR)/eval.all.performance.pdf
+	python $(MAIN_DIR)/plot_performance_time.py \
+		$$OUTFILE \
+		$(MAIN_DIR)/eval.all.time.txt \
+		$(MAIN_DIR)/eval.all.performance.pdf
 
 collect-time:
 	OUTFILE=$(MAIN_DIR)/eval.all.time.txt; \
@@ -42,8 +47,7 @@ collect-time:
 			head -n 1 $$file > $$OUTFILE; \
 		fi; \
 		tail -n +2 $$file >> $$OUTFILE; \
-	done; \
-	python $(MAIN_DIR)/plot_all_time.py $$OUTFILE $(MAIN_DIR)/eval.all.time.pdf
+	done
 
 collect-treestats: collect-performance
 	OUTFILE=$(MAIN_DIR)/eval.all.tree_stats.tsv; \

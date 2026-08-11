@@ -21,8 +21,9 @@ plt.rcParams.update(
     }
 )
 
-input_tsv = sys.argv[1]
-output_pdf = sys.argv[2]
+performance_tsv = sys.argv[1]
+time_tsv = sys.argv[2]
+output_pdf = sys.argv[3]
 
 method_order = ["path", "moran", "lrt_full", "lrt_lambda"]
 method_labels = {
@@ -40,7 +41,7 @@ method_colors = {
     "lrt_lambda": "#009E73",
 }
 
-df = pd.read_csv(input_tsv, sep="\t")
+df = pd.read_csv(performance_tsv, sep="\t")
 
 required_cols = {"ntaxa", "method", "sim_num", "TP", "FN", "TN", "FP"}
 missing_cols = required_cols - set(df.columns)
@@ -80,8 +81,25 @@ plot_df["metric"] = pd.Categorical(
 
 plot_df["method_label"] = plot_df["method"].map(method_labels)
 
-fig, axes = plt.subplots(1, 2, figsize=(8.5, 3.5))
-plt.subplots_adjust(right=0.80)
+time_df = pd.read_csv(time_tsv, sep="\t")
+
+required_time_cols = {"ntaxa", "method", "sim_num", "time_sec"}
+missing_time_cols = required_time_cols - set(time_df.columns)
+if missing_time_cols:
+    sys.stderr.write(f"Missing required time columns: {sorted(missing_time_cols)}\n")
+    sys.exit(1)
+
+time_df["method"] = pd.Categorical(
+    time_df["method"], categories=method_order, ordered=True
+)
+time_df["method_label"] = time_df["method"].map(method_labels)
+
+ntaxa_order = sorted(df["ntaxa"].unique())
+method_label_order = [method_labels[m] for m in method_order]
+palette_by_label = {method_labels[m]: method_colors[m] for m in method_order}
+
+fig, axes = plt.subplots(1, 3, figsize=(12.25, 3.5))
+plt.subplots_adjust(right=0.86, wspace=0.35)
 
 for ax, metric, ylabel in zip(axes, ["precision", "recall"], ["Precision", "Recall"]):
     sub = plot_df.loc[plot_df["metric"] == metric].copy()
@@ -91,7 +109,7 @@ for ax, metric, ylabel in zip(axes, ["precision", "recall"], ["Precision", "Reca
         x="ntaxa",
         y="value",
         hue="method",
-        order=sorted(df["ntaxa"].unique()),
+        order=ntaxa_order,
         hue_order=method_order,
         palette=method_colors,
         errorbar="sd",
@@ -113,6 +131,34 @@ for ax, metric, ylabel in zip(axes, ["precision", "recall"], ["Precision", "Reca
     ax.set_axisbelow(True)
     ax.legend_.remove()
 
+runtime_ax = axes[2]
+sns.barplot(
+    data=time_df,
+    x="ntaxa",
+    y="time_sec",
+    hue="method_label",
+    order=ntaxa_order,
+    hue_order=method_label_order,
+    palette=palette_by_label,
+    errorbar="sd",
+    capsize=0.1,
+    err_kws={"linewidth": 1},
+    ax=runtime_ax,
+)
+
+runtime_ax.set_xlabel("Number of taxa")
+for label in runtime_ax.get_xticklabels():
+    label.set_rotation(-30)
+    label.set_horizontalalignment("center")
+runtime_ax.set_ylabel("Runtime (s)")
+runtime_ax.set_title("")
+runtime_ax.set_yscale("log")
+runtime_ax.spines["top"].set_visible(False)
+runtime_ax.spines["right"].set_visible(False)
+runtime_ax.grid(axis="y", linewidth=0.5, alpha=0.3)
+runtime_ax.set_axisbelow(True)
+runtime_ax.legend_.remove()
+
 handles, labels = axes[0].get_legend_handles_labels()
 labels = [method_labels[m] for m in method_order]
 fig.legend(
@@ -120,7 +166,7 @@ fig.legend(
     labels,
     loc="center left",
     frameon=False,
-    bbox_to_anchor=(0.82, 0.5),
+    bbox_to_anchor=(0.87, 0.5),
 )
 
 fig.savefig(output_pdf, bbox_inches="tight")

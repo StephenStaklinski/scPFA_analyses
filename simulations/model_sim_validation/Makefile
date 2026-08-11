@@ -3,7 +3,7 @@ SHELL := /usr/bin/bash
 MAIN_DIR := /home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/model_sim_validation
 THREADS ?= 10
 
-.PHONY: all diff summaries times archive-all run-all rerun-eval restore-archive
+.PHONY: all diff times archive-all run-all rerun-eval restore-archive
 
 run-all:
 	for dir in $(MAIN_DIR)/*taxa*genes; do \
@@ -34,10 +34,7 @@ restore-archive:
 	top_files=( \
 		"$$archive"/diff.txt \
 		"$$archive"/diff.pdf \
-		"$$archive"/eval.all.fit.summaries.tsv \
 		"$$archive"/eval.all.time.txt \
-		"$$archive"/summaries.pdf \
-		"$$archive"/times.pdf \
 	); \
 	if (( $${#top_files[@]} > 0 )); then \
 		mv "$${top_files[@]}" $(MAIN_DIR)/; \
@@ -54,9 +51,9 @@ restore-archive:
 	done; \
 	shopt -u nullglob
 
-collect-results: diff summaries times
+collect-results: diff
 
-diff:
+diff: times
 	OUTFILE=$(MAIN_DIR)/diff.txt; \
 	rm -f $$OUTFILE; \
 	diff_files=$$(find $(MAIN_DIR) -mindepth 2 -maxdepth 2 ! -path "$(MAIN_DIR)/archive*" -type f -name "diff.txt"); \
@@ -66,19 +63,10 @@ diff:
 		fi; \
 		tail -n +2 $$file >> $$OUTFILE; \
 	done; \
-	python $(MAIN_DIR)/plot_diff.py $$OUTFILE $(MAIN_DIR)/diff.pdf
-
-summaries:
-	OUTFILE=$(MAIN_DIR)/eval.all.fit.summaries.tsv; \
-	rm -f $$OUTFILE; \
-	summary_files=$$(find $(MAIN_DIR) -mindepth 2 -maxdepth 2 ! -path "$(MAIN_DIR)/archive*" -type f -name "eval.all.fit.summaries.tsv"); \
-	for file in $$summary_files; do \
-		if [[ ! -f $$OUTFILE ]]; then \
-			head -n 1 $$file > $$OUTFILE; \
-		fi; \
-		tail -n +2 $$file >> $$OUTFILE; \
-	done; \
-	python $(MAIN_DIR)/plot_summaries.py $$OUTFILE $(MAIN_DIR)/summaries.pdf
+	python $(MAIN_DIR)/plot_diff_time.py \
+		$$OUTFILE \
+		$(MAIN_DIR)/eval.all.time.txt \
+		$(MAIN_DIR)/diff.pdf
 
 times:
 	OUTFILE=$(MAIN_DIR)/eval.all.time.txt; \
@@ -89,8 +77,7 @@ times:
 			head -n 1 $$file > $$OUTFILE; \
 		fi; \
 		tail -n +2 $$file >> $$OUTFILE; \
-	done; \
-	python $(MAIN_DIR)/plot_all_time.py $$OUTFILE $(MAIN_DIR)/times.pdf
+	done
 
 archive-all:
 	archive_dir=$(MAIN_DIR)/archive_all_$$(date +%Y-%m-%d_%H-%M); \
@@ -98,10 +85,7 @@ archive-all:
 	for file in \
 		$(MAIN_DIR)/diff.txt \
 		$(MAIN_DIR)/diff.pdf \
-		$(MAIN_DIR)/eval.all.fit.summaries.tsv \
-		$(MAIN_DIR)/eval.all.time.txt \
-		$(MAIN_DIR)/summaries.pdf \
-		$(MAIN_DIR)/times.pdf; do \
+		$(MAIN_DIR)/eval.all.time.txt; do \
 		if [[ -e $$file ]]; then \
 			mv $$file $$archive_dir/; \
 		fi; \
@@ -120,7 +104,7 @@ archive-all:
 	done
 
 clean-all:
-	rm -f $(MAIN_DIR)/diff.txt $(MAIN_DIR)/diff.pdf $(MAIN_DIR)/eval.all.fit.summaries.tsv $(MAIN_DIR)/eval.all.time.txt $(MAIN_DIR)/summaries.pdf $(MAIN_DIR)/times.pdf
+	rm -f $(MAIN_DIR)/diff.txt $(MAIN_DIR)/diff.pdf $(MAIN_DIR)/eval.all.time.txt
 	for dir in $(MAIN_DIR)/*taxa*genes; do \
 		if [[ -d $$dir ]]; then \
 			make -C $$dir clean; \
