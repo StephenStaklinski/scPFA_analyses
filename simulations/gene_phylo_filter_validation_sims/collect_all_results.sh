@@ -1,5 +1,5 @@
 
-MAIN_DIR=/home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/gex_lineage_tests/gene_phylo_filter_validation_sims
+MAIN_DIR=/home/staklins/projects/gex_lineage_project/gex_lineage_benchmarks/simulations/gene_phylo_filter_validation_sims
 
 # Get all performance results
 OUTFILE=$MAIN_DIR/eval.all.performance.txt

@@ -37,16 +37,38 @@ PATHTIMESPOS := $(shell seq -f tree.%.0f.pos.correlation.path.time 1 $(NSAMP))
 PATHTSVSNEG := $(shell seq -f tree.%.0f.neg.correlation.path.tsv 1 $(NSAMP))
 PATHTIMESNEG := $(shell seq -f tree.%.0f.neg.correlation.path.time 1 $(NSAMP))
 
+# Moran's I and PATH run at every tree size. Include the LRT methods only at
+# sizes where they are intended to run.
+EVALTSVSPOS := $(MORANTSVSPOS) $(PATHTSVSPOS)
+EVALTSVSNEG := $(MORANTSVSNEG) $(PATHTSVSNEG)
+EVALTIMESPOS := $(MORANTIMESPOS) $(PATHTIMESPOS)
+EVALTIMESNEG := $(MORANTIMESNEG) $(PATHTIMESNEG)
+
+ifneq ($(shell test $(NTAXA) -le 1000 && echo yes),)
+EVALTSVSPOS += $(LAMBDATSVSPOS)
+EVALTSVSNEG += $(LAMBDATSVSNEG)
+EVALTIMESPOS += $(LAMBDATIMESPOS)
+EVALTIMESNEG += $(LAMBDATIMESNEG)
+endif
+
+ifneq ($(shell test $(NTAXA) -le 100 && echo yes),)
+EVALTSVSPOS += $(FULLTSVSPOS)
+EVALTSVSNEG += $(FULLTSVSNEG)
+EVALTIMESPOS += $(FULLTIMESPOS)
+EVALTIMESNEG += $(FULLTIMESNEG)
+endif
+
 NGENES := 1000
 DESIRED_TIP_VAR := 0.25
 
-all: eval.all.performance.txt eval.all.time.txt # eval.all.tree_stats.tsv
+all: eval.all.performance.txt eval.all.time.txt
 
 simulate: $(TREES) $(EXPRSPOS) $(EXPRSNEG)
 lambda: $(LAMBDATSVSPOS) $(LAMBDATSVSNEG)
 full: $(FULLTSVSPOS) $(FULLTSVSNEG)
 moran: $(MORANTSVSPOS) $(MORANTSVSNEG)
 path: $(PATHTSVSPOS) $(PATHTSVSNEG)
+treestats: eval.all.tree_stats.tsv
 
 # Simulate the cell lineage tree
 tree.%.true.nwk:
@@ -94,6 +116,7 @@ tree.%.pos.correlation.lrt.lambda.tsv tree.%.pos.correlation.lrt.lambda.time: tr
 		--expr tree.$*.true.pos.expr.tsv \
 		--outprefix tree.$*.pos \
 		--filter-test lrt-lambda \
+		--no-preprocess \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run the Pagel's lambda LRT phylo signal filter on neg sims
@@ -103,6 +126,7 @@ tree.%.neg.correlation.lrt.lambda.tsv tree.%.neg.correlation.lrt.lambda.time: tr
 		--expr tree.$*.true.neg.expr.tsv \
 		--outprefix tree.$*.neg \
 		--filter-test lrt-lambda \
+		--no-preprocess \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run the full LRT phylo signal filter on pos sims
@@ -112,6 +136,7 @@ tree.%.pos.correlation.lrt.full.tsv tree.%.pos.correlation.lrt.full.time: tree.%
 		--expr tree.$*.true.pos.expr.tsv \
 		--outprefix tree.$*.pos \
 		--filter-test lrt-full \
+		--no-preprocess \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run the full LRT phylo signal filter on neg sims
@@ -121,6 +146,7 @@ tree.%.neg.correlation.lrt.full.tsv tree.%.neg.correlation.lrt.full.time: tree.%
 		--expr tree.$*.true.neg.expr.tsv \
 		--outprefix tree.$*.neg \
 		--filter-test lrt-full \
+		--no-preprocess \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter on pos sims
@@ -130,6 +156,7 @@ tree.%.pos.correlation.moran.tsv tree.%.pos.correlation.moran.time: tree.%.true.
 		--expr tree.$*.true.pos.expr.tsv \
 		--outprefix tree.$*.pos \
 		--filter-test moran \
+		--no-preprocess \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run my implementation of the PATH-based Moran's I autocorrelation phylo signal filter on neg sims
@@ -139,6 +166,7 @@ tree.%.neg.correlation.moran.tsv tree.%.neg.correlation.moran.time: tree.%.true.
 		--expr tree.$*.true.neg.expr.tsv \
 		--outprefix tree.$*.neg \
 		--filter-test moran \
+		--no-preprocess \
 		--seed $$(shuf -i 1-1000000000 -n 1)
 
 # Run PATH's implementation of the autocorrelation phylo signal filter on pos sims
@@ -158,12 +186,10 @@ tree.%.neg.correlation.path.tsv tree.%.neg.correlation.path.time: tree.%.true.ne
 		/mnt/$(REL_PATH)/$(NTAXA)taxa/tree.$*.neg.correlation.path.tsv
 
 # Gather all results to one performance summary file, assuming matched pos and neg results
-# Add these files below to the for loop to include all methods
-# $(FULLTSVSPOS)
-eval.all.performance.txt: $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHTSVSNEG) $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) # $(FULLTSVSPOS) $(FULLTSVSNEG)
+eval.all.performance.txt: $(EVALTSVSPOS) $(EVALTSVSNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\tTP\tFN\tTN\tFP\n"; \
-		for f in $(LAMBDATSVSPOS) $(MORANTSVSPOS) $(PATHTSVSPOS); do \
+		for f in $(EVALTSVSPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.tsv//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
@@ -179,12 +205,10 @@ eval.all.performance.txt: $(MORANTSVSPOS) $(MORANTSVSNEG) $(PATHTSVSPOS) $(PATHT
 	} > $@
 
 # Gather all runtimes to one summary file, assuming matched pos and neg results
-# Add these files below to the for loop to include all methods
-# $(FULLTIMESPOS)
-eval.all.time.txt: $(MORANTIMESPOS) $(MORANTIMESNEG) $(PATHTIMESPOS) $(PATHTIMESNEG) $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) # $(FULLTIMESPOS) $(FULLTIMESNEG)
+eval.all.time.txt: $(EVALTIMESPOS) $(EVALTIMESNEG)
 	{ \
 		printf "ntaxa\tmethod\tsim_num\ttime_sec\n"; \
-		for f in $(LAMBDATIMESPOS) $(MORANTIMESPOS) $(PATHTIMESPOS); do \
+		for f in $(EVALTIMESPOS); do \
 			ntaxa=$(NTAXA); \
 			method=$$(basename "$$f" | cut -d"." -f5- | sed 's/\.time//' | tr '.' '_'); \
 			sim_num=$$(basename "$$f" | cut -d"." -f2); \
@@ -214,7 +238,15 @@ eval.all.tree_stats.tsv: $(TREESTATS)
 clean:
 	rm -f tree.* eval.all*
 
-archive-all:
+
+clean-moran:
+	rm -f $(MORANTSVSPOS) $(MORANTSVSNEG) $(MORANTIMESPOS) $(MORANTIMESNEG) eval.all.*
+
+clean-lrt:
+	rm -f $(LAMBDATSVSPOS) $(LAMBDATSVSNEG) $(LAMBDATIMESPOS) $(LAMBDATIMESNEG) \
+		$(FULLTSVSPOS) $(FULLTSVSNEG) $(FULLTIMESPOS) $(FULLTIMESNEG) eval.all.*
+
+archive:
 	archive_dir=archive_$(shell date +%Y-%m-%d_%H.%M); \
 	mkdir -p $$archive_dir ; \
 	mv tree.* $$archive_dir/ ; \

@@ -9,6 +9,7 @@ all: sim.expr.tsv
 sim.term sim.time sim.expr.tsv: ${INPUT_DATA_DIR}/quinn_CP90/quinn.90.var.nex
 	/usr/bin/time -o sim.time \
 		${GEX_LINEAGE_DIR}/bin/gexSim \
+		--seed 1 \
 		--trees $< \
 		--outprefix sim \
 		--include-factorization > sim.term

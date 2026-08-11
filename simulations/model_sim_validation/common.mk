@@ -26,6 +26,13 @@ FITS_LOG_PDFS := $(shell seq -f sim.%.0f.fit.log.pdf 1 $(NSAMP))
 FIRST_EVAL := sim.1.eval.summary.tsv
 EVALS := $(shell seq -f sim.%.0f.eval.summary.tsv 1 $(NSAMP))
 
+# For model fitting without fixing invariances
+# Note that these will take a long time to complete, so only use if necessary
+# MODE_ARGS := --no-post-hoc-identifiability --no-scale-constraint
+
+# To fix invariances, keep these extra args empty since that is the default behavior
+MODE_ARGS :=
+
 all: simulate fit eval
 simulate: $(TREES) $(SIMS)
 fit: $(FITS) $(FITS_LOG_PDFS) eval.all.fit.summaries.pdf $(PANELFIGS) $(ALIGNEDFFIGS)
@@ -39,7 +46,7 @@ sim.%.tree.nwk:
 		--num_tips $(NTAXA) \
 		--birth_rate 0.075 \
 		--death_rate 0.005 \
-		--desired_time $(TOTAL_TIME)
+		--desired_time 1.0
 
 # Convert the simulated tree from Newick to Nexus format
 sim.%.tree.nex: sim.%.tree.nwk
@@ -53,7 +60,6 @@ sim.%.sim.summary.tsv sim.%.sim.F.tsv sim.%.sim.L.tsv sim.%.sim.X.tsv: sim.%.tre
 		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees sim.$*.tree.nex \
 		--outprefix sim.$*.sim \
-		--tree-total-time $(TOTAL_TIME) \
 		--n-genes ${NGENES} \
 		--sigma2 20.0,10.0,5.0,2.0,1.0 \
 		--dim ${K} \
@@ -71,15 +77,15 @@ sim.%.fit.pca.eigenvectors.tsv: sim.%.tree.nex sim.%.sim.X.tsv
 # Fit the model directly to the modeling-ready simulated data. This benchmark
 # intentionally bypasses gexFilter so every simulated gene remains available
 # for the matched simulation-versus-fit evaluation.
-sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv sim.%.fit.pca.eigenvectors.tsv
+# sim.%.fit.pca.eigenvectors.tsv
+sim.%.fit.time sim.%.fit.summary.tsv sim.%.fit.log sim.%.fit.F.tsv sim.%.fit.L.tsv sim.%.fit.X.tsv: sim.%.tree.nex sim.%.sim.summary.tsv
 	/usr/bin/time -o sim.$*.fit.time ${GEX_LINEAGE_DIR}/bin/gexFactor \
 		--seed $$(shuf -i 1-1000000000 -n 1) \
 		--trees sim.$*.tree.nex \
 		--expr sim.$*.sim.X.tsv \
 		--outprefix sim.$*.fit \
 		--dim ${K} \
-		--no-post-hoc-identifiability \
-		--no-scale-constraint > sim.$*.fit.term
+		$(MODE_ARGS) > sim.$*.fit.term
 
 # Plot the fit optimization log results
 sim.%.fit.log.pdf: sim.%.fit.log
