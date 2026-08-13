@@ -16,7 +16,7 @@ CLONES := 4 3 2 1
 
 .PHONY: all archive
 all: vine gex tissue
-vine: $(CLONES:%=quinn_%.vine.nex)
+vine: $(CLONES:%=quinn_%.vine.nex) $(CLONES:%=quinn_%.vine.mean.nex)
 gex: $(CLONES:%=quinn_%_gex.tsv)
 tissue: $(CLONES:%=quinn_%_barcode_tissue.tsv)
 
@@ -47,10 +47,13 @@ quinn_%_barcode_tissue.tsv: quinn_%_character_matrix.tsv
 quinn_%_gex.tsv: quinn_%_character_matrix.tsv $(DATA_DIR_GEX)/GSM4905335_matrix.5k.mtx $(DATA_DIR_GEX)/GSM4905335_barcodes.5k.tsv $(DATA_DIR_GEX)/GSM4905335_genes.5k.tsv
 	singularity exec --bind $(abspath $(DATA_DIR_GEX)):/mnt/gex --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(CASSIOPEIA_SIF) python /mnt/src/subset_mtx_to_char_matrix_cells.py /mnt/cwd/quinn_$*_character_matrix.tsv /mnt/gex/GSM4905335_matrix.5k.mtx /mnt/gex/GSM4905335_barcodes.5k.tsv /mnt/gex/GSM4905335_genes.5k.tsv /mnt/cwd/$@ > quinn_$*_gex.term
 
-quinn_%.vine.nwk: quinn_%_character_matrix.tsv
-	/usr/bin/time -o quinn_$*.vine.time $(VINE) -M 400 -c 100 -v 0 -i CRISPR $< --logf quinn_$*.vine.log --mean quinn_$*.vine.mean.nwk > $@
+quinn_%.vine.nwk quinn_%.vine.mean.nwk: quinn_%_character_matrix.tsv
+	/usr/bin/time -o quinn_$*.vine.time $(VINE) -M 400 -c 100 -v 0 -i CRISPR $< --logf quinn_$*.vine.log --mean quinn_$*.vine.mean.nwk > quinn_$*.vine.nwk
 
 quinn_%.vine.nex: quinn_%.vine.nwk
+	singularity exec --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CASSIOPEIA_SIF) python /mnt/src/nwk2nex.py /mnt/cwd/$< /mnt/cwd/$@
+
+quinn_%.vine.mean.nex: quinn_%.vine.mean.nwk
 	singularity exec --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CASSIOPEIA_SIF) python /mnt/src/nwk2nex.py /mnt/cwd/$< /mnt/cwd/$@
 
 clean:

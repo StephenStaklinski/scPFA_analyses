@@ -19,6 +19,8 @@ parser.add_argument("--fit-summary")
 parser.add_argument("--active-variance-threshold", type=float, default=1e-5)
 parser.add_argument("--factor", type=int, action="append",
                     help="Factor/module number to plot (repeatable); bypasses --fit-summary")
+parser.add_argument("--all-factors", action="store_true",
+                    help="Plot every factor/module column; bypasses --fit-summary")
 parser.add_argument("--title-prefix", default="Factor")
 parser.add_argument("--output",
                     help="Output path (default: OUT_PREFIX.factor_trees.pdf)")
@@ -33,11 +35,13 @@ if not factor_cols:
     raise ValueError("No factor_* columns found.")
 
 active_factor_cols = []
-if args.factor:
+if args.all_factors:
+    active_factor_cols = factor_cols
+elif args.factor:
     active_factor_cols = [f"factor_{number}" for number in args.factor]
 else:
     if not args.fit_summary:
-        parser.error("--fit-summary is required unless --factor is supplied")
+        parser.error("--fit-summary is required unless --factor or --all-factors is supplied")
     summary = pd.read_csv(args.fit_summary, sep="\t", index_col=0)
     for parameter, value in summary["value"].items():
         match = re.fullmatch(r"sigma2_latent_LF([0-9]+)", parameter)

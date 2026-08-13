@@ -16,7 +16,7 @@ TLS2_PATH := $(DATA_DIR)/GSM6831759_TracerTLS2
 SAMPLES := tls1 tls2
 
 .PHONY: all archive
-all: $(SAMPLES:%=%.vine.nex) $(SAMPLES:%=%_gex.tsv)
+all: $(SAMPLES:%=%.vine.nex) $(SAMPLES:%=%.vine.mean.nex) $(SAMPLES:%=%_gex.tsv)
 
 archive:
 	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
@@ -49,8 +49,11 @@ tls1_gex.tsv: $(TLS1_PATH)/matrix.mtx $(TLS1_PATH)/barcodes.tsv $(TLS1_PATH)/fea
 tls2_gex.tsv: $(TLS2_PATH)/matrix.mtx $(TLS2_PATH)/barcodes.tsv $(TLS2_PATH)/features.tsv tls2_character_matrix.tsv
 	singularity exec --bind $(abspath $(TLS2_PATH)):/mnt/input --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(CASSIOPEIA_SIF) python /mnt/src/subset_mtx_to_char_matrix_cells.py /mnt/cwd/tls2_character_matrix.tsv /mnt/input/matrix.mtx /mnt/input/barcodes.tsv /mnt/input/features.tsv /mnt/cwd/$@ > tls2_gex.term
 
-%.vine.nwk: %_character_matrix.tsv
-	/usr/bin/time -o $*.vine.time $(VINE) -M 400 -c 100 -v 0 -i CRISPR $< --logf $*.vine.log --mean $*.vine.mean.nwk > $@
+%.vine.nwk %.vine.mean.nwk: %_character_matrix.tsv
+	/usr/bin/time -o $*.vine.time $(VINE) -M 400 -c 100 -v 0 -i CRISPR $< --logf $*.vine.log --mean $*.vine.mean.nwk > $*.vine.nwk
 
 %.vine.nex: %.vine.nwk
+	singularity exec --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CASSIOPEIA_SIF) python /mnt/src/nwk2nex.py /mnt/cwd/$< /mnt/cwd/$@
+
+%.vine.mean.nex: %.vine.mean.nwk
 	singularity exec --bind $(CURR_DIR):/mnt/cwd --bind $(SRC):/mnt/src $(CASSIOPEIA_SIF) python /mnt/src/nwk2nex.py /mnt/cwd/$< /mnt/cwd/$@

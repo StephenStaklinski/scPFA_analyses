@@ -15,11 +15,9 @@ CURR_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_filter
 PREPROCESSED_DIR := ../preprocessed_data
 
 CLONES := 1 2 3 4
-TREE_INDEX ?= 1
 FILTER_TEST ?= moran
 SEED ?= 1
 
-TREES := $(CLONES:%=quinn_%.tree.nex)
 FILTERED_GEX := $(CLONES:%=quinn_%.$(FILTER_TEST).filtered.tsv)
 NO_RIBO_MITO_FILTERED_GEX := $(CLONES:%=quinn_%_no_ribo_mito.$(FILTER_TEST).filtered.tsv)
 MORAN_RESULTS := $(CLONES:%=quinn_%.$(FILTER_TEST).correlation.moran.tsv)
@@ -45,7 +43,7 @@ archive:
 	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
 	shopt -s nullglob; \
 	outputs=( \
-		quinn_*.tree.nex quinn_*.filtered.tsv quinn_*.correlation.*.tsv \
+		quinn_*.filtered.tsv quinn_*.correlation.*.tsv \
 		quinn_*.term quinn_*.time *.go.pdf *.go.tsv \
 		*.heritable_overlap.pdf *.heritable_overlap.tsv ribo_mito_heritability.pdf \
 	); \
@@ -57,24 +55,8 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-quinn_%.tree.nex: $(PREPROCESSED_DIR)/quinn_%.vine.nex
-	awk -v tree_index="$(TREE_INDEX)" '\
-		BEGIN { tree_count = 0; found = 0; } \
-		/^[[:space:]]*[Tt][Rr][Ee][Ee][[:space:]]/ { \
-			tree_count++; \
-			if (tree_count == tree_index) { print; found = 1; } \
-			next; \
-		} \
-		{ print; } \
-		END { \
-			if (!found) { \
-				printf "TREE_INDEX %d was not found in %s\n", tree_index, FILENAME > "/dev/stderr"; \
-				exit 1; \
-			} \
-		}' $< > $@
-
 quinn_%.$(FILTER_TEST).filtered.tsv: \
-quinn_%.tree.nex $(PREPROCESSED_DIR)/quinn_%_gex.tsv
+$(PREPROCESSED_DIR)/quinn_%.vine.mean.nex $(PREPROCESSED_DIR)/quinn_%_gex.tsv
 	prefix=$(@:.filtered.tsv=); \
 	/usr/bin/time -o $$prefix.time $(GEXFILTER) \
 		--trees $< \
@@ -84,7 +66,7 @@ quinn_%.tree.nex $(PREPROCESSED_DIR)/quinn_%_gex.tsv
 		--seed $(SEED) > $$prefix.term
 
 quinn_%_no_ribo_mito.$(FILTER_TEST).filtered.tsv: \
-quinn_%.tree.nex $(PREPROCESSED_DIR)/quinn_%_gex.tsv
+$(PREPROCESSED_DIR)/quinn_%.vine.mean.nex $(PREPROCESSED_DIR)/quinn_%_gex.tsv
 	prefix=$(@:.filtered.tsv=); \
 	/usr/bin/time -o $$prefix.time $(GEXFILTER) \
 		--trees $< \
@@ -175,8 +157,8 @@ $(MORAN_RESULTS) $(NO_RIBO_MITO_MORAN_RESULTS)
 			/mnt/cwd/quinn_4_no_ribo_mito.$(FILTER_TEST).correlation.moran.tsv
 
 clean:
-	rm -f quinn_*.tree.nex quinn_*.filtered.tsv \
+	rm -f quinn_*.filtered.tsv \
 		quinn_*.correlation.*.tsv quinn_*.term quinn_*.time
 	rm -f *.go.pdf *.go.tsv
 	rm -f *.heritable_overlap.pdf *.heritable_overlap.tsv
-	rm -f *.ribo_mito_heritability.pdf
+	rm -f ribo_mito_heritability.pdf *go.plot.term

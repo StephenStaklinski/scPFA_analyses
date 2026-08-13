@@ -86,7 +86,11 @@ $(SAMPLE_CORRELATIONS): \
 		$(foreach sample,$(SAMPLES),--sample $(sample) /mnt/cwd/$(sample).hotspot.modules.tsv /mnt/cwd/$(sample).hotspot.autocorrelations.tsv) \
 		--output /mnt/cwd/$@
 
-%.hotspot.modules.tsv: \
+%.hotspot.modules.tsv \
+%.hotspot.autocorrelations.tsv \
+%.hotspot.local_correlations.tsv \
+%.hotspot.module_scores.tsv \
+%.hotspot.parameters.tsv: \
 		$(PREPROCESSED_DIR)/%_gex.tsv \
 		$(PREPROCESSED_DIR)/%.vine.mean.nwk \
 		$(HOTSPOT_SIF)

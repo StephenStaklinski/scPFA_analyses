@@ -15,7 +15,6 @@ CURR_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_factor_final
 PREPROCESSED_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/preprocessed_data
 FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_filter
 PCA_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_pca
-PCA_UMAP_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/pca_umap
 CLONES := 1 2 3 4
 
 # Selected from ../gex_factor_dim_sweep/quinn_*.dim_summary.pdf.
@@ -39,9 +38,6 @@ GSEA := $(CLONES:%=quinn_%.fit.L.gsea.tsv)
 FACTOR_HEATMAPS := $(CLONES:%=quinn_%.fit.L.factor_heatmap.pdf)
 ACTIVE_FACTOR_HEATMAPS := $(CLONES:%=quinn_%.fit.L.active_factor_heatmap.pdf)
 FLOW_TREES := $(CLONES:%=quinn_%.fit.latent_flow.factor_trees.pdf)
-PCA_TREE_DEPTH := $(CLONES:%=quinn_%.fit.latent_flow.pca.tree_depth.pdf)
-PCA_LATENT_DISTANCE := $(CLONES:%=quinn_%.fit.latent_flow.pca.latent_distance_from_root.pdf)
-PCA_PLOT_STAMPS := $(CLONES:%=quinn_%.fit.latent_flow.pca.plots.done)
 WADDINGTON_PLOTS := $(CLONES:%=quinn_%.fit.latent_flow.waddington.pdf)
 NO_RIBO_MITO_FIT_SUMMARIES := $(CLONES:%=quinn_%_no_ribo_mito.fit.summary.tsv)
 NO_RIBO_MITO_LOG_PLOTS := $(CLONES:%=quinn_%_no_ribo_mito.fit.log.pdf)
@@ -51,9 +47,6 @@ NO_RIBO_MITO_GSEA := $(CLONES:%=quinn_%_no_ribo_mito.fit.L.gsea.tsv)
 NO_RIBO_MITO_FACTOR_HEATMAPS := $(CLONES:%=quinn_%_no_ribo_mito.fit.L.factor_heatmap.pdf)
 NO_RIBO_MITO_ACTIVE_FACTOR_HEATMAPS := $(CLONES:%=quinn_%_no_ribo_mito.fit.L.active_factor_heatmap.pdf)
 NO_RIBO_MITO_FLOW_TREES := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.factor_trees.pdf)
-NO_RIBO_MITO_PCA_TREE_DEPTH := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.pca.tree_depth.pdf)
-NO_RIBO_MITO_PCA_LATENT_DISTANCE := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.pca.latent_distance_from_root.pdf)
-NO_RIBO_MITO_PCA_PLOT_STAMPS := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.pca.plots.done)
 NO_RIBO_MITO_WADDINGTON_PLOTS := $(CLONES:%=quinn_%_no_ribo_mito.fit.latent_flow.waddington.pdf)
 ACTIVE_FACTOR_CORRELATIONS := quinn_1_quinn_2_no_ribo_mito.fit.L.active_factor_correlations.pdf
 
@@ -79,12 +72,12 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-quinn_%.fit.summary.tsv: $(FILTERED_DIR)/quinn_%.tree.nex $(FILTERED_DIR)/quinn_%.moran.filtered.tsv $(PCA_DIR)/quinn_%.pca.eigenvectors.tsv $$(call DIM_CHANGED,$$*)
-	/usr/bin/time -o quinn_$*.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/quinn_$*.tree.nex --expr $(FILTERED_DIR)/quinn_$*.moran.filtered.tsv --outprefix quinn_$*.fit --dim $(DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > quinn_$*.fit.term
+quinn_%.fit.summary.tsv: $(PREPROCESSED_DIR)/quinn_%.vine.mean.nex $(FILTERED_DIR)/quinn_%.moran.filtered.tsv $$(call DIM_CHANGED,$$*)
+	/usr/bin/time -o quinn_$*.fit.time $(GEXFACTOR) --trees $(PREPROCESSED_DIR)/quinn_$*.vine.mean.nex --expr $(FILTERED_DIR)/quinn_$*.moran.filtered.tsv --outprefix quinn_$*.fit --dim $(DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > quinn_$*.fit.term
 	@printf '%s\n' '$(DIM_$*)' > .chosen_dim.$*
 
-quinn_%_no_ribo_mito.fit.summary.tsv: $(FILTERED_DIR)/quinn_%.tree.nex $(FILTERED_DIR)/quinn_%_no_ribo_mito.moran.filtered.tsv $(PCA_DIR)/quinn_%_no_ribo_mito.pca.eigenvectors.tsv $$(call NO_RIBO_MITO_DIM_CHANGED,$$*)
-	/usr/bin/time -o quinn_$*_no_ribo_mito.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/quinn_$*.tree.nex --expr $(FILTERED_DIR)/quinn_$*_no_ribo_mito.moran.filtered.tsv --outprefix quinn_$*_no_ribo_mito.fit --dim $(NO_RIBO_MITO_DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > quinn_$*_no_ribo_mito.fit.term
+quinn_%_no_ribo_mito.fit.summary.tsv: $(PREPROCESSED_DIR)/quinn_%.vine.mean.nex $(FILTERED_DIR)/quinn_%_no_ribo_mito.moran.filtered.tsv $$(call NO_RIBO_MITO_DIM_CHANGED,$$*)
+	/usr/bin/time -o quinn_$*_no_ribo_mito.fit.time $(GEXFACTOR) --trees $(PREPROCESSED_DIR)/quinn_$*.vine.mean.nex --expr $(FILTERED_DIR)/quinn_$*_no_ribo_mito.moran.filtered.tsv --outprefix quinn_$*_no_ribo_mito.fit --dim $(NO_RIBO_MITO_DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > quinn_$*_no_ribo_mito.fit.term
 	@printf '%s\n' '$(NO_RIBO_MITO_DIM_$*)' > .chosen_dim.$*_no_ribo_mito
 
 quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv quinn_%.fit.log quinn_%.fit.latent_flow.tsv: quinn_%.fit.summary.tsv
@@ -129,18 +122,6 @@ quinn_%.fit.latent_flow.factor_trees.pdf: quinn_%.fit.latent_flow.tsv quinn_%.fi
 
 quinn_%_no_ribo_mito.fit.latent_flow.factor_trees.pdf: quinn_%_no_ribo_mito.fit.latent_flow.tsv quinn_%_no_ribo_mito.fit.summary.tsv $(SRC)/plot_latent_flow_trees.py
 	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_trees.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow --fit-summary /mnt/cwd/quinn_$*_no_ribo_mito.fit.summary.tsv
-
-quinn_%.fit.latent_flow.pca.plots.done: quinn_%.fit.latent_flow.tsv $(SRC)/plot_latent_flow_pca.py
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_pca.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow
-	@test -s quinn_$*.fit.latent_flow.pca.tree_depth.pdf
-	@test -s quinn_$*.fit.latent_flow.pca.latent_distance_from_root.pdf
-	@touch $@
-
-quinn_%_no_ribo_mito.fit.latent_flow.pca.plots.done: quinn_%_no_ribo_mito.fit.latent_flow.tsv $(SRC)/plot_latent_flow_pca.py
-	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_pca.py /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow.tsv /mnt/cwd/quinn_$*_no_ribo_mito.fit.latent_flow
-	@test -s quinn_$*_no_ribo_mito.fit.latent_flow.pca.tree_depth.pdf
-	@test -s quinn_$*_no_ribo_mito.fit.latent_flow.pca.latent_distance_from_root.pdf
-	@touch $@
 
 quinn_%.fit.latent_flow.waddington.pdf: quinn_%.fit.latent_flow.tsv quinn_%.fit.summary.tsv $(PREPROCESSED_DIR)/quinn_%_barcode_tissue.tsv $(SRC)/plot_latent_flow_waddington.py
 	singularity exec --bind $(SRC):/mnt/src --bind $(CURR_DIR):/mnt/cwd --bind $(PREPROCESSED_DIR):/mnt/preprocessed_data $(PYPLOTTING_SIF) python /mnt/src/plot_latent_flow_waddington.py /mnt/cwd/quinn_$*.fit.latent_flow.tsv /mnt/cwd/quinn_$*.fit.latent_flow --fit-summary /mnt/cwd/quinn_$*.fit.summary.tsv 

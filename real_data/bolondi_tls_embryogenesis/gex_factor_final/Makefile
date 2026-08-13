@@ -13,6 +13,7 @@ CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
 GEXFACTOR := /home/staklins/projects/gex_lineage_project/gex_lineage/bin/gexFactor
 
 CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_factor_final
+PREPROCESSED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/preprocessed_data
 FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_filter
 PCA_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_pca
 
@@ -72,14 +73,12 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-# $(PCA_DIR)/%.pca.eigenvectors.tsv
-%.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv $$(call FIT_CONFIG_CHANGED,$$*)
-	/usr/bin/time -o $*.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/$*.tree.nex --expr $(FILTERED_DIR)/$*.moran.filtered.tsv --outprefix $*.fit --dim $(DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*.fit.term
+%.fit.summary.tsv: $(PREPROCESSED_DIR)/%.vine.mean.nex $(FILTERED_DIR)/%.moran.filtered.tsv $$(call FIT_CONFIG_CHANGED,$$*)
+	/usr/bin/time -o $*.fit.time $(GEXFACTOR) --trees $(PREPROCESSED_DIR)/$*.vine.mean.nex --expr $(FILTERED_DIR)/$*.moran.filtered.tsv --outprefix $*.fit --dim $(DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*.fit.term
 	@printf '%s\n' '$(call FIT_CONFIG,$*)' > .fit_config.$*
 
-# $(PCA_DIR)/%_no_ribo_mito.pca.eigenvectors.tsv
-%_no_ribo_mito.fit.summary.tsv: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv $$(call NO_RIBO_MITO_FIT_CONFIG_CHANGED,$$*)
-	/usr/bin/time -o $*_no_ribo_mito.fit.time $(GEXFACTOR) --trees $(FILTERED_DIR)/$*.tree.nex --expr $(FILTERED_DIR)/$*_no_ribo_mito.moran.filtered.tsv --outprefix $*_no_ribo_mito.fit --dim $(NO_RIBO_MITO_DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*_no_ribo_mito.fit.term
+%_no_ribo_mito.fit.summary.tsv: $(PREPROCESSED_DIR)/%.vine.mean.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv $$(call NO_RIBO_MITO_FIT_CONFIG_CHANGED,$$*)
+	/usr/bin/time -o $*_no_ribo_mito.fit.time $(GEXFACTOR) --trees $(PREPROCESSED_DIR)/$*.vine.mean.nex --expr $(FILTERED_DIR)/$*_no_ribo_mito.moran.filtered.tsv --outprefix $*_no_ribo_mito.fit --dim $(NO_RIBO_MITO_DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > $*_no_ribo_mito.fit.term
 	@printf '%s\n' '$(call NO_RIBO_MITO_FIT_CONFIG,$*)' > .fit_config.$*_no_ribo_mito
 
 %.fit.F.tsv %.fit.L.tsv %.fit.X.tsv %.fit.log %.fit.latent_flow.tsv: | %.fit.summary.tsv

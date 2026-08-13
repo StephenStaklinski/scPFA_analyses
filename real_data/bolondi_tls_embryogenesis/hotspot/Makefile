@@ -25,9 +25,11 @@ MAX_GENES ?= 0
 MODULES := $(SAMPLES:%=%.hotspot.modules.tsv)
 GO_ENRICHMENT := $(SAMPLES:%=%.hotspot.modules.go.tsv)
 SAMPLE_CORRELATIONS := module_sample_correlations.pdf
+MODULE_FLOWS := $(SAMPLES:%=%.hotspot.module_scores.latent_flow.tsv)
+MODULE_TREES := $(SAMPLES:%=%.hotspot.module_trees.pdf)
 
 .PHONY: all archive clean
-all: $(MODULES) $(GO_ENRICHMENT) $(SAMPLE_CORRELATIONS)
+all: $(MODULES) $(GO_ENRICHMENT) $(SAMPLE_CORRELATIONS) $(MODULE_TREES)
 
 archive:
 	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
@@ -40,6 +42,36 @@ archive:
 		mv "$${outputs[@]}" "$$archive_dir"/; \
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
+
+%.hotspot.module_scores.latent_flow.tsv: \
+		%.hotspot.module_scores.tsv \
+		$(PREPROCESSED_DIR)/%.vine.mean.nwk \
+		$(SRC)/hotspot_module_scores_to_latent_flow.py \
+		$(HOTSPOT_SIF)
+	singularity exec \
+		--bind $(CURR_DIR):/mnt/cwd \
+		--bind $(SRC):/mnt/src \
+		--bind $(PREPROCESSED_DIR):/mnt/preprocessed_data \
+		$(HOTSPOT_SIF) \
+		python /mnt/src/hotspot_module_scores_to_latent_flow.py \
+		/mnt/cwd/$*.hotspot.module_scores.tsv \
+		/mnt/preprocessed_data/$*.vine.mean.nwk \
+		/mnt/cwd/$@
+
+%.hotspot.module_trees.pdf: \
+		%.hotspot.module_scores.latent_flow.tsv \
+		$(SRC)/plot_latent_flow_trees.py \
+		$(PYPLOTTING_SIF)
+	singularity exec \
+		--bind $(CURR_DIR):/mnt/cwd \
+		--bind $(SRC):/mnt/src \
+		$(PYPLOTTING_SIF) \
+		python /mnt/src/plot_latent_flow_trees.py \
+		/mnt/cwd/$< \
+		/mnt/cwd/$*.hotspot.module_trees \
+		--all-factors \
+		--title-prefix Module \
+		--output /mnt/cwd/$@
 
 $(SAMPLE_CORRELATIONS): \
 		$(MODULES) \

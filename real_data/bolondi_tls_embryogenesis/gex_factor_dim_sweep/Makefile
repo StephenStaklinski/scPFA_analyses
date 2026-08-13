@@ -38,16 +38,16 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-tls1.K%.fit.summary.tsv: $(FILTERED_DIR)/tls1.tree.nex $(FILTERED_DIR)/tls1.moran.filtered.tsv
+tls1.K%.fit.summary.tsv: $(PREPROCESSED_DIR)/tls1.vine.mean.nex $(FILTERED_DIR)/tls1.moran.filtered.tsv
 	/usr/bin/time -o tls1.K$*.fit.time $(GEXFACTOR) --trees $< --expr $(word 2,$^) --outprefix tls1.K$*.fit --dim $* --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > tls1.K$*.fit.term
 
-tls2.K%.fit.summary.tsv: $(FILTERED_DIR)/tls2.tree.nex $(FILTERED_DIR)/tls2.moran.filtered.tsv
+tls2.K%.fit.summary.tsv: $(PREPROCESSED_DIR)/tls2.vine.mean.nex $(FILTERED_DIR)/tls2.moran.filtered.tsv
 	/usr/bin/time -o tls2.K$*.fit.time $(GEXFACTOR) --trees $< --expr $(word 2,$^) --outprefix tls2.K$*.fit --dim $* --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > tls2.K$*.fit.term
 
-tls1_no_ribo_mito.K%.fit.summary.tsv: $(FILTERED_DIR)/tls1.tree.nex $(FILTERED_DIR)/tls1_no_ribo_mito.moran.filtered.tsv
+tls1_no_ribo_mito.K%.fit.summary.tsv: $(PREPROCESSED_DIR)/tls1.vine.mean.nex $(FILTERED_DIR)/tls1_no_ribo_mito.moran.filtered.tsv
 	/usr/bin/time -o tls1_no_ribo_mito.K$*.fit.time $(GEXFACTOR) --trees $< --expr $(word 2,$^) --outprefix tls1_no_ribo_mito.K$*.fit --dim $* --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > tls1_no_ribo_mito.K$*.fit.term
 
-tls2_no_ribo_mito.K%.fit.summary.tsv: $(FILTERED_DIR)/tls2.tree.nex $(FILTERED_DIR)/tls2_no_ribo_mito.moran.filtered.tsv
+tls2_no_ribo_mito.K%.fit.summary.tsv: $(PREPROCESSED_DIR)/tls2.vine.mean.nex $(FILTERED_DIR)/tls2_no_ribo_mito.moran.filtered.tsv
 	/usr/bin/time -o tls2_no_ribo_mito.K$*.fit.time $(GEXFACTOR) --trees $< --expr $(word 2,$^) --outprefix tls2_no_ribo_mito.K$*.fit --dim $* --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > tls2_no_ribo_mito.K$*.fit.term
 
 tls1.K%.fit.L.tsv tls1.K%.fit.log tls1.K%.fit.time: tls1.K%.fit.summary.tsv

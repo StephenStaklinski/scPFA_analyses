@@ -11,6 +11,7 @@ SRC := $(BENCHMARKS_DIR)/src
 CONTAINERS := $(BENCHMARKS_DIR)/containers
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
 CURR_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_pca
+PREPROCESSED_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/preprocessed_data
 FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_filter
 
 CLONES := 1 2 3 4
@@ -39,17 +40,17 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-quinn_%.pca.eigenvectors.tsv quinn_%.pca.time: $(FILTERED_DIR)/quinn_%.tree.nex $(FILTERED_DIR)/quinn_%.moran.filtered.tsv
+quinn_%.pca.eigenvectors.tsv quinn_%.pca.time: $(PREPROCESSED_DIR)/quinn_%.vine.mean.nex $(FILTERED_DIR)/quinn_%.moran.filtered.tsv
 	/usr/bin/time -o quinn_$*.pca.time $(GEXPCA) \
-		--tree $(FILTERED_DIR)/quinn_$*.tree.nex \
+		--tree $(PREPROCESSED_DIR)/quinn_$*.vine.mean.nex \
 		--expr $(FILTERED_DIR)/quinn_$*.moran.filtered.tsv \
 		--outprefix quinn_$* \
 		--dim $(PCA_DIM) > quinn_$*.pca.term
 
 quinn_%_no_ribo_mito.pca.eigenvectors.tsv quinn_%_no_ribo_mito.pca.time: \
-$(FILTERED_DIR)/quinn_%.tree.nex $(FILTERED_DIR)/quinn_%_no_ribo_mito.moran.filtered.tsv
+$(PREPROCESSED_DIR)/quinn_%.vine.mean.nex $(FILTERED_DIR)/quinn_%_no_ribo_mito.moran.filtered.tsv
 	/usr/bin/time -o quinn_$*_no_ribo_mito.pca.time $(GEXPCA) \
-		--tree $(FILTERED_DIR)/quinn_$*.tree.nex \
+		--tree $(PREPROCESSED_DIR)/quinn_$*.vine.mean.nex \
 		--expr $(FILTERED_DIR)/quinn_$*_no_ribo_mito.moran.filtered.tsv \
 		--outprefix quinn_$*_no_ribo_mito \
 		--dim $(PCA_DIM) > quinn_$*_no_ribo_mito.pca.term

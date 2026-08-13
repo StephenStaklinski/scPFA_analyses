@@ -15,11 +15,9 @@ CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_filter
 PREPROCESSED_DIR := ../preprocessed_data
 
 SAMPLES := tls1 tls2
-TREE_INDEX ?= 1
 FILTER_TEST ?= moran
 SEED ?= 1
 
-TREES := $(SAMPLES:%=%.tree.nex)
 FILTERED_GEX := $(SAMPLES:%=%.$(FILTER_TEST).filtered.tsv)
 NO_RIBO_MITO_FILTERED_GEX := $(SAMPLES:%=%_no_ribo_mito.$(FILTER_TEST).filtered.tsv)
 NO_RIBO_MITO_MORAN_RESULTS := $(SAMPLES:%=%_no_ribo_mito.$(FILTER_TEST).correlation.moran.tsv)
@@ -43,7 +41,7 @@ archive:
 	@archive_dir=archive_$$(date +%Y-%m-%d_%H-%M-%S); \
 	shopt -s nullglob; \
 	outputs=( \
-		*.tree.nex *.filtered.tsv *.correlation.*.tsv *.term *.time \
+		*.filtered.tsv *.correlation.*.tsv *.term *.time \
 		*.go.pdf *.go.tsv *.heritable_overlap.pdf *.heritable_overlap.tsv \
 		ribo_mito_heritability.pdf \
 	); \
@@ -55,23 +53,7 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-%.tree.nex: $(PREPROCESSED_DIR)/%.vine.nex
-	awk -v tree_index="$(TREE_INDEX)" '\
-		BEGIN { tree_count = 0; found = 0; } \
-		/^[[:space:]]*[Tt][Rr][Ee][Ee][[:space:]]/ { \
-			tree_count++; \
-			if (tree_count == tree_index) { print; found = 1; } \
-			next; \
-		} \
-		{ print; } \
-		END { \
-			if (!found) { \
-				printf "TREE_INDEX %d was not found in %s\n", tree_index, FILENAME > "/dev/stderr"; \
-				exit 1; \
-			} \
-		}' $< > $@
-
-%.$(FILTER_TEST).filtered.tsv: %.tree.nex $(PREPROCESSED_DIR)/%_gex.tsv
+%.$(FILTER_TEST).filtered.tsv: $(PREPROCESSED_DIR)/%.vine.mean.nex $(PREPROCESSED_DIR)/%_gex.tsv
 	prefix=$(@:.filtered.tsv=); \
 	/usr/bin/time -o $$prefix.time $(GEXFILTER) \
 		--trees $< \
@@ -81,7 +63,7 @@ archive:
 		--seed $(SEED) > $$prefix.term
 
 %_no_ribo_mito.$(FILTER_TEST).filtered.tsv: \
-%.tree.nex $(PREPROCESSED_DIR)/%_gex.tsv
+$(PREPROCESSED_DIR)/%.vine.mean.nex $(PREPROCESSED_DIR)/%_gex.tsv
 	prefix=$(@:.filtered.tsv=); \
 	/usr/bin/time -o $$prefix.time $(GEXFILTER) \
 		--trees $< \
@@ -166,7 +148,7 @@ $(SRC)/plot_ribo_mito_heritability.py $(PYPLOTTING_SIF)
 			/mnt/cwd/tls2_no_ribo_mito.$(FILTER_TEST).correlation.moran.tsv
 
 clean:
-	rm -f *.tree.nex *.filtered.tsv *.correlation.*.tsv *.term *.time
+	rm -f *.filtered.tsv *.correlation.*.tsv *.term *.time
 	rm -f *.go.pdf *.go.tsv
 	rm -f *.heritable_overlap.pdf *.heritable_overlap.tsv
 	rm -f *.ribo_mito_heritability.pdf

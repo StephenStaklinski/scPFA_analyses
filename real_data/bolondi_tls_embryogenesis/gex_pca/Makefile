@@ -11,6 +11,7 @@ SRC := $(BENCHMARKS_DIR)/src
 CONTAINERS := $(BENCHMARKS_DIR)/containers
 CLUSTERPROFILER_SIF := $(CONTAINERS)/clusterprofiler/clusterprofiler.sif
 CURR_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_pca
+PREPROCESSED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/preprocessed_data
 FILTERED_DIR := $(BENCHMARKS_DIR)/real_data/bolondi_tls_embryogenesis/gex_filter
 
 SAMPLES := tls1 tls2
@@ -40,17 +41,17 @@ archive:
 		echo "Archived $${#outputs[@]} outputs in $$archive_dir"; \
 	fi
 
-%.pca.eigenvectors.tsv %.pca.time: $(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%.moran.filtered.tsv
+%.pca.eigenvectors.tsv %.pca.time: $(PREPROCESSED_DIR)/%.vine.mean.nex $(FILTERED_DIR)/%.moran.filtered.tsv
 	/usr/bin/time -o $*.pca.time $(GEXPCA) \
-		--tree $(FILTERED_DIR)/$*.tree.nex \
+		--tree $(PREPROCESSED_DIR)/$*.vine.mean.nex \
 		--expr $(FILTERED_DIR)/$*.moran.filtered.tsv \
 		--outprefix $* \
 		--dim $(PCA_DIM) > $*.pca.term
 
 %_no_ribo_mito.pca.eigenvectors.tsv %_no_ribo_mito.pca.time: \
-$(FILTERED_DIR)/%.tree.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv
+$(PREPROCESSED_DIR)/%.vine.mean.nex $(FILTERED_DIR)/%_no_ribo_mito.moran.filtered.tsv
 	/usr/bin/time -o $*_no_ribo_mito.pca.time $(GEXPCA) \
-		--tree $(FILTERED_DIR)/$*.tree.nex \
+		--tree $(PREPROCESSED_DIR)/$*.vine.mean.nex \
 		--expr $(FILTERED_DIR)/$*_no_ribo_mito.moran.filtered.tsv \
 		--outprefix $*_no_ribo_mito \
 		--dim $(PCA_DIM) > $*_no_ribo_mito.pca.term
