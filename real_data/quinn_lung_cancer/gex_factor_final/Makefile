@@ -18,10 +18,10 @@ PCA_DIR := $(BENCHMARKS_DIR)/real_data/quinn_lung_cancer/gex_pca
 CLONES := 1 2 3 4
 
 # Selected from ../gex_factor_dim_sweep/quinn_*.dim_summary.pdf.
-DIM_1 := 1
-DIM_2 := 1
-DIM_3 := 1
-DIM_4 := 1
+DIM_1 := 10
+DIM_2 := 10
+DIM_3 := 10
+DIM_4 := 10
 NO_RIBO_MITO_DIM_1 := 10
 NO_RIBO_MITO_DIM_2 := 10
 NO_RIBO_MITO_DIM_3 := 10
@@ -80,7 +80,7 @@ quinn_%_no_ribo_mito.fit.summary.tsv: $(PREPROCESSED_DIR)/quinn_%.vine.mean.nex 
 	/usr/bin/time -o quinn_$*_no_ribo_mito.fit.time $(GEXFACTOR) --trees $(PREPROCESSED_DIR)/quinn_$*.vine.mean.nex --expr $(FILTERED_DIR)/quinn_$*_no_ribo_mito.moran.filtered.tsv --outprefix quinn_$*_no_ribo_mito.fit --dim $(NO_RIBO_MITO_DIM_$*) --L-l1-strength 0.1 --L-loading-overlap-strength 1 --seed 1 > quinn_$*_no_ribo_mito.fit.term
 	@printf '%s\n' '$(NO_RIBO_MITO_DIM_$*)' > .chosen_dim.$*_no_ribo_mito
 
-quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv quinn_%.fit.log quinn_%.fit.latent_flow.tsv: quinn_%.fit.summary.tsv
+quinn_%.fit.F.tsv quinn_%.fit.L.tsv quinn_%.fit.X.tsv quinn_%.fit.log quinn_%.fit.latent_flow.tsv: | quinn_%.fit.summary.tsv
 	@test -e $@ || { echo "ERROR: expected output missing after gexFactor run: $@" >&2; exit 1; }
 
 quinn_%.fit.log.pdf: quinn_%.fit.summary.tsv

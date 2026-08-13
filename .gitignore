@@ -29,7 +29,7 @@ tls2
 runs
 *.tsv
 overlap_summary.tsv
-.chosen_dim
+.chosen_di*
 
 # Ignore built containers
 *.sif
