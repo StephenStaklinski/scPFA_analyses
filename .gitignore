@@ -30,6 +30,9 @@ runs
 *.tsv
 overlap_summary.tsv
 .chosen_di*
+.fit_config.*
+*.term
+*.png
 
 # Ignore built containers
 *.sif
